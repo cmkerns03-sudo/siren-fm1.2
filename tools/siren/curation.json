@@ -50,8 +50,6 @@
    "NOISE:WHOOSH",
    "NOISE:NZ METAL",
    "NOISE:STATIC",
-   "JUNO:NOISE SWEEP",
-   "HYBRID:RISER",
    "NOISE:WIND"
   ]
  },
@@ -101,8 +99,6 @@
   "FX": [
    "NOISE:RISER",
    "NOISE:WHOOSH",
-   "JUNO:NOISE SWEEP",
-   "HYBRID:RISER",
    "NOISE:OCEAN",
    "NOISE:WIND"
   ]
@@ -199,8 +195,7 @@
    "NOISE:RISER",
    "NOISE:WHOOSH",
    "NOISE:TONAL NZ",
-   "LOFI:ZAP",
-   "NOISE:VINYL"
+   "LOFI:ZAP"
   ]
  },
  "RAVE": {
@@ -223,7 +218,6 @@
   "HOOK": [
    "HYBRID:HOOVER",
    "TRIO:HOOVER",
-   "JUNO:HOOVER JUNO",
    "DIGITAL:M1 PIANO",
    "ANALOG:FAT LEAD",
    "JUNO:SAW LEAD 106"
@@ -232,8 +226,7 @@
    "ANALOG:JUNO PAD",
    "TRIO:SAW PAD",
    "PHASE:CZ CHOIR",
-   "ANALOG:WARM PAD",
-   "TRIO:PULSE PAD"
+   "ANALOG:WARM PAD"
   ],
   "STAB": [
    "TRIO:RAVE STAB",
@@ -348,6 +341,7 @@
  },
  "HOUSE": {
   "BASS": [
+   "WHEEL:HOUSE ORGN",
    "ANALOG:MONO BASS",
    "ANALOG:FUNK BASS",
    "DIGITAL:DX BASS",
@@ -368,9 +362,9 @@
    "WHEEL:HOUSE ORGN",
    "DIGITAL:RHODES",
    "PHASE:CZ EPIANO",
-   "JUNO:POLY KEYS",
    "WHEEL:GOSPEL",
-   "DIGITAL:SUITCASE"
+   "DIGITAL:SUITCASE",
+   "WHEEL:SOUL ORGAN"
   ],
   "PAD": [
    "ANALOG:WARM PAD",
@@ -393,9 +387,10 @@
   "FX": [
    "NOISE:RISER",
    "NOISE:WHOOSH",
-   "NOISE:VINYL",
-   "JUNO:NOISE SWEEP",
-   "NOISE:OCEAN"
+   "NOISE:OCEAN",
+   "NOISE:TONAL NZ",
+   "NOISE:STATIC",
+   "LOFI:ZAP"
   ]
  }
 }

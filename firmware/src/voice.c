@@ -93,7 +93,12 @@ static void track_lfo_tick(track_t *t)
 static uint32_t trk_nvoice(const track_t *t)
 {
     uint32_t c = ENGINES[t->engine] == &ENG_PHYS ? phys_poly(t) : ENGINES[t->engine]->poly;   /* (PHYS: by MODEL) */
-    return c && c < NPOLY ? c : NPOLY;
+    c = c && c < NPOLY ? c : NPOLY;
+#if SIREN
+    if ((uint32_t)(t - trk) < NPART && siren_poly((uint32_t)(t - trk)) < c)
+        c = siren_poly((uint32_t)(t - trk));            /* (SIREN 0.4: each layer what it needs; fewer under load) */
+#endif
+    return c;
 }
 
 /* ------------------------------------------------- the shared voice budget --- */
@@ -1208,6 +1213,11 @@ static void vrender(track_t *t, const engine_t *e, voice_t *v, int32_t *out, uin
     }
 }
 static struct { track_t *t; const engine_t *e; uint32_t n, a, b; } vsj;
+#if SIREN
+#define SIREN_C1_BUSY siren_c1_busy
+#else
+#define SIREN_C1_BUSY 0
+#endif
 static uint32_t vs_jobs, vs_split;                  /* (console, tests: blocks handed over, voices rendered there) */
 static void vs_job(uint32_t arg)                    /* on core 1 */
 {
@@ -1230,7 +1240,7 @@ static int vs_ok(const engine_t *e)                 /* its render may run on two
 static void vs_finish(track_t *t, const engine_t *e, int32_t *out, uint32_t n)
 {
     uint32_t k, i, h = vs_n, handed = 0;
-    if (vs_n >= 2u && n <= CTL && cpu1_units != 0) {
+    if (vs_n >= 2u && n <= CTL && cpu1_units != 0 && !SIREN_C1_BUSY) {
         h = vs_n / 2u;                              /* core 1 the second half (the bigger one when odd: this core
                                                      * also works out the modulation, the mix and the effects) */
         vsj.t = t, vsj.e = e, vsj.n = n, vsj.a = h, vsj.b = vs_n;
@@ -1321,7 +1331,7 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
     uint32_t nr = 0, fade = t->xf_on && t->xf;
     int16_t pe_new[8];
 #if CLIPPER_SYNTH
-    int split = vs_ok(e) && cpu1_units != 0 && cpu1_on();   /* (0.7) the voices on both cores */
+    int split = vs_ok(e) && cpu1_units != 0 && cpu1_on() && !SIREN_C1_BUSY;   /* (0.7) the voices on both cores */
     vs_n = vsl_n = 0;
     part_side_on = (uint8_t)sided;
     if (sided)

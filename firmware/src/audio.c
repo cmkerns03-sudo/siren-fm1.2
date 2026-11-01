@@ -80,6 +80,9 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
                 uint32_t pct = all / FM1_TICKS_PER_US * 100u / (HALF_FRAMES * 1000000u / FS);
                 if (pct > diag_peak)
                     diag_peak = pct;
+#if SIREN
+                siren_load_half(pct);                   /* (SIREN 0.4: its guard reads every half) */
+#endif
             }
         }
         if (us > audio_max_us)

@@ -54,6 +54,7 @@ static struct {
     /* (0.2) the CPU guard: 0 the set as written; 1 pads and stabs two notes; 2 the FX layer out, the pad its root, the
      * arp in eighths. From the audio interrupt's own load (audio.c song.cpu_q8), with a hold (the hysteresis) */
     uint8_t lean; uint16_t lean_hold; uint16_t cpu_test;
+    volatile uint32_t ld_peak, ld_sum, ld_n; uint32_t ld_track;   /* (0.4) the audio interrupt's load, each half buffer */
     /* (0.2) the DJ's hands (siren_px_*): the effect held, its argument, sixteenths and units since it began */
     volatile int8_t px; uint8_t px_arg, px_slot; uint32_t px_n16, px_u;
     uint32_t n16;                                /* sixteenths fired since power-on (the rolls' grid) */
@@ -312,6 +313,44 @@ static int siren_held_back(const sb_note_t *x)   /* (0.2) a live note an effect 
         return 1;
     return x->layer == L_DRUMS && (sr.m_dall || (sr.m_dlo && siren_drum_lo(x->note)) || (sr.m_dhi && siren_drum_hi(x->note)));
 }
+/* (0.4) what the guard leaves out, level by level: the notes that cost the most and say the least first (a pad's
+ * upper notes, ghost drums, the FX layer outside a build), then the busy ones (the arp and the hats in eighths), then
+ * the pad and the arp (the bare groove: drums, bass, hook, stabs) */
+static int siren_lean_skip(const sb_note_t *x, const sb_events_t *ev, uint32_t *npad, uint32_t *nstab)
+{
+    uint32_t L = x->layer, lv = sr.lean, odd = ev->step & 1u;
+    if (L == L_PAD) return (lv >= 3u && ev->sec != SEC_BREAK && ev->sec != SEC_INTRO && ev->sec != SEC_OUTRO) || ++*npad > (lv >= 2u ? 2u : 3u);
+    if (L == L_STAB) return ++*nstab > 2u;
+    if (L == L_FX) return ev->sec != SEC_BUILD;
+    if (L == L_ARP) return lv >= 3u || (lv >= 2u && odd);
+    if (L == L_DRUMS) {
+        uint32_t n = x->note, core = n == 35u || n == 36u || n == 38u || n == 39u || n == 40u || n == 49u;
+        if (!core && x->vel < 70u) return 1;                                  /* the ghosts */
+        if (lv >= 2u && odd && (n == 42u || n == 44u || n == 70u)) return 1;  /* the hats and shakers in eighths */
+        if (lv >= 3u && !core && n != 42u && n != 46u) return 1;              /* the percussion */
+    }
+    return 0;
+}
+/* (0.4) each layer's voices at most (voice.c trk_nvoice): what it needs (a bass one and its release, a pad its chord),
+ * fewer as the guard rises; the stolen voices fade out (voice_kill) */
+static uint32_t siren_poly(uint32_t part)
+{
+    static const uint8_t CAP[4][6] = {{2, 3, 3, 5, 4, 2}, {2, 2, 3, 4, 3, 1}, {2, 2, 2, 3, 3, 1}, {2, 1, 2, 2, 2, 1}};
+    return CAP[sr.lean & 3u][part % 6u];
+}
+/* (0.4) the guard went up: the voices over a layer's new cap go now (faded out, voice.c voice_kill), the oldest last */
+static void siren_trim_voices(void)
+{
+    uint32_t p, i;
+    for (p = 0; p < 6u; p++) {
+        uint32_t cap = siren_poly(p), n = 0;
+        for (i = 0; i < NVOICE; i++)
+            if (trk[p].v[i].active && trk[p].v[i].stage != 4u && ++n > cap)
+                voice_kill(&trk[p].v[i]);
+    }
+}
+static void siren_load_half(uint32_t pct) { if (pct > sr.ld_peak) sr.ld_peak = pct; sr.ld_sum += pct; sr.ld_n++; }   /* (audio.c) */
+
 /* (0.2) a roll's sixteenth: the loop's notes again (the layers it holds), as long as the loop at most */
 static void siren_replay(uint32_t k, uint32_t len16, uint32_t u16)
 {
@@ -339,11 +378,18 @@ static void siren_fire(void)
     s = sr.n16++;
     sb_step16(&sb, ev);
     song.g[G_BPM] = ev->bpm;
-    {   /* (0.2) the CPU guard, from the audio interrupt's own load (Q8, 256 = all of it) */
-        uint32_t c = (uint32_t)song.cpu_q8 + sr.cpu_test;
-        if (c > 205u) { sr.lean = 2; sr.lean_hold = 128; }
-        else if (c > 179u && sr.lean < 1u) { sr.lean = 1; sr.lean_hold = 128; }
-        else if (c < 140u && sr.lean && !--sr.lean_hold) { sr.lean--; sr.lean_hold = 128; }
+    {   /* (0.4) the CPU guard: the real load of every half buffer since the last sixteenth (audio.c, %), the worst and
+         * the mean. Up a level at once when a half went over 90 % (or the mean over 80 %), at least one at 78 % and
+         * for the first bars of a new track (six sounds changing, the brain's new track); down one when it has been
+         * under 62 % for two bars. 0 the set as written .. 3 the bare groove (siren_fire, siren_poly) */
+        uint32_t pk = sr.ld_peak, avg = sr.ld_n ? sr.ld_sum / sr.ld_n : 0u;
+        sr.ld_peak = 0; sr.ld_sum = 0; sr.ld_n = 0;
+        if (sr.cpu_test) pk = avg = sr.cpu_test;                                 /* (the host tests: a load told) */
+        if (!sr.cpu_test && sb.track_no != sr.ld_track) { sr.ld_track = sb.track_no; if (sr.lean < 1u) sr.lean = 1; if (sr.lean_hold < 32u) sr.lean_hold = 32; }
+        if (pk >= 90u || avg >= 80u) { if (sr.lean < 3u) sr.lean++, siren_trim_voices(); sr.lean_hold = 32; }
+        else if (pk >= 78u && sr.lean < 1u) { sr.lean = 1; sr.lean_hold = 32; siren_trim_voices(); }
+        else if (sr.lean_hold) sr.lean_hold--;
+        else if (sr.lean && pk < 62u) { sr.lean--; sr.lean_hold = 32; }
     }
     roll = sr.px == SPX_ROLL || sr.px == SPX_PROLL || sr.px == SPX_DROLL;
     if (!sr.r_on) {                                  /* (0.2) the notes as written, for a roll */
@@ -363,8 +409,7 @@ static void siren_fire(void)
         const sb_note_t *x = &ev->notes[i];
         if ((sr.r_on && ((sr.r_mask >> x->layer) & 1u)) || siren_held_back(x))
             continue;
-        if (sr.lean && ((x->layer == L_PAD && ++npad > (sr.lean > 1u ? 1u : 2u)) || (x->layer == L_STAB && ++nstab > 2u) ||
-                        (sr.lean > 1u && (x->layer == L_FX || (x->layer == L_ARP && (ev->step & 1u))))))
+        if (sr.lean && siren_lean_skip(x, ev, &npad, &nstab))
             continue;
         siren_play(x, 0, (uint32_t)(x->len * (u16 / 100u) * 92u));
     }

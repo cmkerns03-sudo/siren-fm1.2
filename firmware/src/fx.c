@@ -532,8 +532,13 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         int32_t x;
 #endif
         /* chorus: two modulated short delays, 5..15 ms, the LFO half a turn apart: left and right move apart */
+#if SIREN
+        yl = yr = 0;                                    /* (SIREN 0.4: no part sends to the chorus: not run) */
+        if (0) {
+#else
         cho_buf[fx.cho_w & (CHO_LEN - 1u)] = (int16_t)clamp(cho_in[i] >> 1, -32768, 32767);
         {
+#endif
             int32_t r0 = ca0 + dca * (int32_t)i, r1 = cb0 + dcb * (int32_t)i;
             uint32_t i0 = (uint32_t)r0 >> 8, i1 = (uint32_t)r1 >> 8;
             int32_t c0 = cho_buf[(fx.cho_w - i0) & (CHO_LEN - 1u)], c1 = cho_buf[(fx.cho_w - i0 - 1u) & (CHO_LEN - 1u)];
@@ -1472,6 +1477,29 @@ static void djf_process(int32_t *l, int32_t *r, uint32_t n)
 #if CLIPPER_SYNTH
 #include "bus.c"              /* Clipper 0.3: the master EQ and compressor */
 #endif
+#if SIREN
+/* (SIREN 0.4) the drums as a job of their own, on the second core (mix_block): their voices, the drum track's FILTER,
+ * into buffers of their own. They read only the drums' state (drums.c, drum_synth.c, the drum track, its slicer and
+ * filter), which nothing else writes during the render (the events come before it) */
+static int32_t sd_l[CTL], sd_r[CTL], sd_v[CTL], sd_d[CTL];
+static uint32_t sd_n;
+static void siren_drums_job(uint32_t arg)
+{
+    uint32_t i, n = sd_n;
+    tsvf_t fc;
+    djf_t *f = &tflt[TRK_DRUM];
+    (void)arg;
+    for (i = 0; i < n; i++)
+        sd_l[i] = sd_r[i] = sd_v[i] = sd_d[i] = 0;
+    slicer_drums(sd_l, sd_r, sd_v, sd_d, n);
+    if (djf_block(f, TDRUM->p[P_TFLT], &fc)) {
+        tflt_run(f, &fc, sd_l, n, 0);
+        tflt_run(f, &fc, sd_r, n, 1);
+        tflt_run(f, &fc, sd_v, n, 2);
+        tflt_run(f, &fc, sd_d, n, 3);
+    }
+}
+#endif
 static int32_t master_cur = -1;                        /* the volume knob, ramped per sample (no zipper) */
 static void mix_block(int32_t *out, uint32_t n)
 {
@@ -1481,6 +1509,33 @@ static void mix_block(int32_t *out, uint32_t n)
         send_c[i] = send_d[i] = send_r[i] = mix_l[i] = mix_r[i] = 0;
     events_block(n);
     duck_block(n * (uint32_t)song.g[G_BPM]);
+#if SIREN
+    if (n <= CTL) {   /* (SIREN 0.4) the drums on the second core while this one renders the one-voice layers (bass, arp,
+                       * hook, fx); then the chords (pad, stabs), their voices split over both cores as before. The
+                       * same sums in another order: the same output, bit for bit (integers) */
+        static const uint8_t FIRST[4] = {0, 1, 2, 5}, LAST[2] = {3, 4};
+        int handed;
+        drums.a0 = TDRUM->att;                          /* (the drum track's mute fade: here, on this core) */
+        drums.a1 = 32767 - gain_next(TDRUM);
+        sd_n = n;
+        handed = cpu1_on() && cpu1_units != 0 && cpu1_run(siren_drums_job, 0);
+        siren_c1_busy = (uint8_t)handed;
+        for (i = 0; i < 4u; i++)
+            mix_part(&trk[FIRST[i]], n);
+        if (!handed || cpu1_wait() < 0)
+            siren_drums_job(0);                         /* (one core, or core 1 late and held: here) */
+        siren_c1_busy = 0;
+        for (i = 0; i < 2u; i++)
+            mix_part(&trk[LAST[i]], n);
+        for (i = 0; i < n; i++) {
+            mix_l[i] += sd_l[i];
+            mix_r[i] += sd_r[i];
+            send_r[i] += sd_v[i];
+            send_d[i] += sd_d[i];
+        }
+    } else
+#endif
+    {
     for (i = 0; i < NPART; i++)
         mix_part(&trk[i], n);
 #if !CLIPPER_SYNTH || BOARD_SMK37 || SIREN                         /* (Clipper 1.2: no drum machine: nothing to render; its sounds are
@@ -1510,6 +1565,7 @@ static void mix_block(int32_t *out, uint32_t n)
         }
     }
 #endif
+    }
     click_render(mix_l, mix_r, n);                      /* the metronome: its own voice (drums.c), any kit, any mute */
 #if SIREN
     siren_mix(mix_l, mix_r, n);                         /* SIREN: the sub under the bass */

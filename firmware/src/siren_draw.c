@@ -336,7 +336,7 @@ static void su_foot(void)
     cv_begin(240, 14, fx ? SU_ACC : SU_PANEL);
     if (fx) { su_t(4, 4, "FX", SU_BG, 1); su_t(22, 4, m, SU_BG, 1); }
     else su_t(4, 4, m, su.msg_t || nx.n ? SU_ACC : SU_DIM, 1);
-    if (sr.lean) su_t(170, 4, "ECO", fx ? SU_BG : SU_ACC, 1);
+    if (sr.lean) { char e[6] = "ECO 0"; e[4] = (char)('0' + sr.lean); su_t(164, 4, e, fx ? SU_BG : SU_ACC, 1); }
     su_c(&s, "CPU "); su_u(&s, q, 1); su_c(&s, "%");
     su_tr(236, 4, s.b, fx ? SU_BG : (q > 80u ? SU_ACC : SU_DIM), 1);
     cv_blit(0, 226);

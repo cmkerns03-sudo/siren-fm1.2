@@ -562,5 +562,8 @@ static int32_t siren_duck_depth(void);
 static int32_t siren_gain_q12(void);
 static int32_t siren_bend(void);
 static int32_t siren_eq_db(uint32_t band);
+static uint32_t siren_poly(uint32_t part);
+static void siren_load_half(uint32_t pct);
+static uint8_t siren_c1_busy;     /* (0.4) the second core renders the drums this block: no voice split meanwhile */
 static void siren_scope_tap(void);
 #endif

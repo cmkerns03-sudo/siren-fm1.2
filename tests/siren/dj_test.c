@@ -73,10 +73,12 @@ int main(int argc, char **argv)
         }
         {   /* the CPU guard: told the FM-1 is full, the set thins (the FX layer out), and comes back */
             uint32_t i, fxv = 0;
-            sr.cpu_test = 230; blocks(bb * 4);
-            CHECK(sr.lean == 2, "guard: not lean (%u)", sr.lean);
+            sr.cpu_test = 95; blocks(bb * 4);                           /* (0.4: the load in %, as audio.c tells it) */
+            CHECK(sr.lean == 3, "guard: not at its last level (%u)", sr.lean);
             for (i = 0; i < NVOICE; i++) fxv += trk[L_FX - 1].v[i].active && trk[L_FX - 1].v[i].gate;
-            CHECK(fxv == 0, "guard: the FX layer still plays");
+            CHECK(fxv == 0 || sr.ev.sec == SEC_BUILD, "guard: the FX layer still plays");
+            for (i = 0, fxv = 0; i < NVOICE; i++) fxv += trk[L_PAD - 1].v[i].active && trk[L_PAD - 1].v[i].gate;
+            CHECK(fxv <= 2u, "guard: the pad holds %u notes", fxv);
             sr.cpu_test = 0; blocks(bb * 20);
             CHECK(sr.lean == 0, "guard: still lean after the load went (%u)", sr.lean);
         }
