@@ -68,6 +68,7 @@ static uint32_t uni_turns(uint32_t r, int32_t p16, int32_t d16)
 #include "eng_wseq.c"           /* WSEQ: wave sequencing (Clipper 0.6) */
 #include "eng_juno.c"           /* JUNO: the Juno poly, its chorus in fx.c (Clipper 0.8) */
 #include "eng_vector.c"         /* VECTOR: vector synthesis (Clipper 0.8) */
+#include "eng_wob.c"            /* WOB: SIREN's dubstep bass */
 #endif
 
 typedef union {
@@ -119,6 +120,7 @@ static const engine_t *const ENGINES[NENGINES] = {&ENG_ANALOG, &ENG_DIGITAL, &EN
                                                     &ENG_VPS, &ENG_TERRAIN,                /* 17, 18 */
                                                     &ENG_FMX, &ENG_WSEQ,                   /* 19, 20 */
                                                     &ENG_JUNO, &ENG_VECTOR,                /* 21, 22 */
+                                                    &ENG_WOB,                              /* 23 (ENGI_WOB) */
 #endif
 };
 #if CLIPPER_SYNTH
@@ -130,9 +132,9 @@ _Static_assert(ENGI_WAVE == 13u && ENGI_ACID == 14u && ENGI_STRINGS == 15u && EN
 static int32_t wt_wanted(void)
 {
     uint32_t k;
-    for (k = 0; k < 2u; k++) {
+    for (k = 0; k < (SIREN ? NPART : 2u); k++) {         /* (SIREN: the first part playing WAVE: its bass) */
         const track_t *t = &trk[k];
-        if (k && (t->p[P_LYMODE] != LY_LAYER && t->p[P_LYMODE] != LY_SPLIT && t->p[P_LYMODE] != LY_MULTI))
+        if (k && !SIREN && (t->p[P_LYMODE] != LY_LAYER && t->p[P_LYMODE] != LY_SPLIT && t->p[P_LYMODE] != LY_MULTI))
             break;
         if (t->xf_on && ENGINES[t->engine % NENGINES] == &ENG_WAVE)
             return wt_have;

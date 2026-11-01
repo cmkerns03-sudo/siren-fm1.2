@@ -3504,7 +3504,9 @@ static void events_block(uint32_t n)
         arp_keep_req = 0;
     if (pr)
         mi_pen[0] = mi_pen[1] = mi_pen[2] = mi_pen[3] = 0;   /* (1.0: the MIDI pen's notes held: never stuck either) */
-    keyboard_block();
+#if !SIREN
+    keyboard_block();                                 /* (SIREN: the keys are its controls, siren_ui.c) */
+#endif
 #if !CLIPPER_SYNTH || BOARD_SMK37   /* (Clipper on the FM-1: no drum machine) */
     drum_audition_poll();                             /* (the editor's DRUM SYNTH page) */
 #endif
@@ -3609,8 +3611,12 @@ static void events_block(uint32_t n)
                     }
         mi_pen[0] = mi_pen[1] = mi_pen[2] = mi_pen[3] = 0;
     }
+#if SIREN
+    siren_block(n, adv);                              /* SIREN: the brain plays the parts and the drums (siren.c) */
+#else
     for (i = 0; i < (CLIPPER_SYNTH ? 1u : NTRK); i++)  /* (Clipper: the instrument's sequencer only) */
         seq_tick(&trk[i], adv);
+#endif
     click_tick();
     roll_block(adv);
     for (i = 0; i < (CLIPPER_SYNTH ? 1u : NPART); i++)

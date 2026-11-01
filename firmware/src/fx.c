@@ -673,7 +673,11 @@ static struct {
 
 static void duck_block(uint32_t adv)
 {
+#if SIREN
+    int32_t depth = siren_duck_depth(), x;               /* SIREN: the brain's (siren.c) */
+#else
     int32_t depth = CLIPPER_SYNTH ? 0 : song.g[G_DUCK] * 258, x;   /* (Clipper: its slot is the reverb TYPE) */
+#endif
     uint32_t len = BEAT_U / 2u;
     duck.g0 = duck.g1;
     if (drums.kick) {
@@ -1507,6 +1511,9 @@ static void mix_block(int32_t *out, uint32_t n)
     }
 #endif
     click_render(mix_l, mix_r, n);                      /* the metronome: its own voice (drums.c), any kit, any mute */
+#if SIREN
+    siren_mix(mix_l, mix_r, n);                         /* SIREN: the sub under the bass */
+#endif
     fx_buses(send_c, send_d, send_r, wet_l, wet_r, n);
     for (i = 0; i < n; i++) {
         mix_l[i] += wet_l[i];
@@ -1519,6 +1526,9 @@ static void mix_block(int32_t *out, uint32_t n)
     bus_process(mix_l, mix_r, n);
 #endif
     m1 = (int32_t)song.master_q12;
+#if SIREN
+    m1 = (m1 * siren_gain_q12()) >> 12;                 /* SIREN: a break breathes lower, a drop hits */
+#endif
     m0 = master_cur < 0 ? m1 : master_cur;
     master_cur = m1;
     if (n > CTL)
@@ -1542,6 +1552,9 @@ static void mix_block(int32_t *out, uint32_t n)
             }
         }
         lim_block(&lim_dac, ol, orr, n);
+#if SIREN
+        siren_scope_tap();
+#endif
         for (i = 0; i < n; i++) {
             out[2u * i] = knee(ol[i]);
             out[2u * i + 1u] = knee(orr[i]);

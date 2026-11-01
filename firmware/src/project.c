@@ -45,7 +45,7 @@ _Static_assert(G_DRDLY == PROJ_NG && G_COUNT == PROJ_NG + 1u + (CLIPPER_SYNTH ? 
 #define PROJ_NP 61u
 #define PROJ_E0 53u
 #define PROJ_NX (P_E0 - PROJ_E0)
-_Static_assert(P_COUNT == PROJ_NP || (CLIPPER_SYNTH && P_COUNT == PROJ_NP + PROJ_NX && P_COUNT < 128 && NTRK == 4),
+_Static_assert(P_COUNT == PROJ_NP || (CLIPPER_SYNTH && P_COUNT == PROJ_NP + PROJ_NX && P_COUNT < 128 && PROJ_T == 4),
                "a track's parameters as stored (Clipper: track 3's lock slots hold the rest: PROJ_XM3 below)");
 #if CLIPPER_SYNTH
 /* tracks 1 and 2's LFO 2, ENV 2 and matrix (0.4: PROJ_XA values each) and INSERT (0.6: PROJ_XI each) <-> bytes in the
@@ -243,7 +243,7 @@ typedef struct {
     uint32_t magic, size;
     int16_t g[PROJ_NG];
     uint8_t sel, drdly, rsv[2];                /* the selected track; 2.5: G_DRDLY */
-    proj_trk_t t[NTRK];
+    proj_trk_t t[PROJ_T];
     uint32_t sum;
 } project_t;
 typedef struct {                               /* a track of format 4 (SLOOP 2.0 .. 2.3), read only */
@@ -258,7 +258,7 @@ typedef struct {                               /* format 4, read only */
     uint32_t magic, size;
     int16_t g[PROJ_NG];
     uint8_t sel, rsv[3];
-    proj_trk_v4_t t[NTRK];
+    proj_trk_v4_t t[PROJ_T];
     uint32_t sum;
 } project_v4_t;
 typedef struct { uint8_t note[4], n, time, flags, vel; } step8_t;   /* the steps of formats 1..3 */
@@ -271,7 +271,7 @@ typedef struct {                               /* format 3 (SLOOP 1.x), read onl
     uint32_t magic, size;
     int16_t g[PROJ_NG_V3];
     uint8_t sel, rsv[3];
-    proj_trk_v3_t t[NTRK];
+    proj_trk_v3_t t[PROJ_T];
     uint32_t sum;
 } project_v3_t;
 typedef struct {                               /* a track of formats 1 and 2, read only */
@@ -283,7 +283,7 @@ typedef struct {                               /* format 2 (until 0.9), read onl
     uint32_t magic, size;
     int16_t g[PROJ_NG_V2];
     uint8_t sel, rsv[3];
-    proj_trk_v2_t t[NTRK];
+    proj_trk_v2_t t[PROJ_T];
     uint32_t sum;
 } project_v2_t;
 typedef struct {                               /* format 1 (until 0.5 beta), read only */
@@ -314,7 +314,7 @@ typedef struct {
     uint32_t magic, size;
     int16_t g[PROJ_NG];
     uint8_t sel, drdly, rsv[2];
-    proj_trk_v6_t t[NTRK];
+    proj_trk_v6_t t[PROJ_T];
     uint32_t sum;
 } project_v6_t;
 _Static_assert(sizeof(project_v6_t) == 3816u, "format 6 as SLOOP 2.6 stores it");
@@ -425,7 +425,7 @@ UI_SMALL static int proj_from_v4(project_t *q, const project_v4_t *v4, int n)
     q->size = sizeof *q;
     memcpy(q->g, v4->g, sizeof q->g);
     q->sel = v4->sel;
-    for (i = 0; i < NTRK; i++) {
+    for (i = 0; i < PROJ_T; i++) {
         uint32_t k;
         for (k = 0; k < PROJ_E0; k++)                  /* by id up to P_CHORD, the parameters added since: */
             q->t[i].p[k] = k < PROJ_NP_V4 - 8u ? v4->t[i].p[k] : TP[k].def;   /* their defaults; P_E0.. moved */
@@ -469,7 +469,7 @@ UI_SMALL static int proj_from_v6(project_t *q, const project_v6_t *v6, int n)
     memcpy(q->g, v6->g, sizeof q->g);
     q->sel = v6->sel;
     q->drdly = v6->drdly;
-    for (i = 0; i < NTRK; i++) {
+    for (i = 0; i < PROJ_T; i++) {
         const proj_trk_v6_t *s = &v6->t[i];
         proj_trk_t *d = &q->t[i];
         for (k = 0; k < PROJ_E0; k++)
@@ -510,7 +510,7 @@ UI_SMALL static void proj_from_v3_ok(project_t *q, const project_v3_t *v3)
     q->size = sizeof *q;
     proj_g_from_old(q->g, v3->g);
     q->sel = v3->sel;
-    for (i = 0; i < NTRK; i++)
+    for (i = 0; i < PROJ_T; i++)
         proj_trk_from_v3(&q->t[i], &v3->t[i], i == TRK_DRUM);
     q->sum = proj_sum(q);
 }
@@ -535,7 +535,7 @@ UI_SMALL static int proj_from_v2(project_t *q, const project_v2_t *v2, int n)
     memset(v3, 0, sizeof *v3);
     memcpy(v3->g, v2->g, sizeof v3->g);
     v3->sel = v2->sel;
-    for (i = 0; i < NTRK; i++)
+    for (i = 0; i < PROJ_T; i++)
         proj_trk_v2_to_v3(&v3->t[i], &v2->t[i], i == TRK_DRUM);
     proj_from_v3_ok(q, v3);
     return 1;
@@ -554,7 +554,7 @@ UI_SMALL static int proj_from_v1(project_t *q, const project_v1_t *v1, int n)
     memcpy(v3->g, v1->g, sizeof v3->g);
     proj_trk_v2_to_v3(&v3->t[0], &v1->t, 0);
     proj_from_v3_ok(q, v3);
-    for (i = 1; i < NTRK; i++) {               /* the other tracks: their defaults, no steps */
+    for (i = 1; i < PROJ_T; i++) {               /* the other tracks: their defaults, no steps */
         uint32_t k;
         for (k = 0; k < PROJ_NP; k++)
             q->t[i].p[k] = k >= PROJ_E0 ? ENGINES[trk_def_engine(i)]->edit[k - PROJ_E0].def : TP[k].def;
@@ -648,7 +648,7 @@ UI_SMALL static void proj_capture(project_t *p)        /* what is playing now, a
     p->sel = song.sel;
     p->drdly = (uint8_t)song.g[G_DRDLY];
     p->rsv[0] = CLIPPER_SYNTH ? CLIPPER_PROJ_MARK : 0u;   /* (Clipper 0.3: its bus, layer and modulation are set) */
-    for (i = 0; i < NTRK; i++) {
+    for (i = 0; i < PROJ_T; i++) {
         uint32_t k;
         for (k = 0; k < PROJ_E0; k++)
             p->t[i].p[k] = trk[i].p[k];
@@ -699,7 +699,7 @@ UI_SMALL static void proj_apply(const project_t *p, int all)
             song.g[i] = (int16_t)clamp(p->g[i], GP[i].min, GP[i].max);
     if (all || !CLIPPER_SYNTH)
         song.g[G_DRDLY] = (int16_t)clamp(p->drdly, GP[G_DRDLY].min, GP[G_DRDLY].max);   /* (a load and a section, as REV) */
-    for (k = 0; k < NTRK; k++) {
+    for (k = 0; k < PROJ_T; k++) {
         track_t *t = &trk[k];
         const proj_trk_t *s = &p->t[k];
         uint32_t e = k < NPART ? s->engine % NENGINES : 0u;
@@ -730,7 +730,7 @@ UI_SMALL static void proj_apply(const project_t *p, int all)
             t->p[i] = (int16_t)clamp(v, d->min, d->max);
         }
         t->preset = (uint8_t)(ENGINES[e]->npresets ? (s->preset == 0xFFu ? 0u : s->preset) % ENGINES[e]->npresets : 0u);
-        arp_snd[k % NTRK] = (uint8_t)t->p[P_AMODE];     /* (1.0) a loaded project's arp is its sounds': the next sound
+        arp_snd[k % PROJ_T] = (uint8_t)t->p[P_AMODE];     /* (1.0) a loaded project's arp is its sounds': the next sound
                                                          * loaded turns it off (seq.c arp_snd) */
         memcpy(t->step, s->step, sizeof t->step);
         for (i = 0; i < NSTEP; i++)                     /* the nudges and locks, each inside its range */
@@ -837,11 +837,11 @@ UI_SMALL static void project_apply(const project_t *p)
 {
     uint32_t k;
     transport_req = 2;
-    panic_req = (1u << NTRK) - 1u;
+    panic_req = (1u << PROJ_T) - 1u;
     fm1_irq_off();                                      /* the audio ISR must not see half a project */
     proj_apply(p, 1);
     part_ctl_reset();                                   /* (the wheels back to the middle, the pedal up) */
-    song.sel = (uint8_t)(p->sel < NTRK && !CLIPPER_SYNTH ? p->sel : 0u);
+    song.sel = (uint8_t)(p->sel < PROJ_T && !CLIPPER_SYNTH ? p->sel : 0u);
     fm1_irq_on();
     for (k = 0; k < NPART; k++)                         /* a format 1 project: the default sounds of tracks 2, 3 */
         if (p->t[k].preset == 0xFFu) {
@@ -973,7 +973,7 @@ UI_SMALL static void autosave_tick(void)                /* main loop */
 
 UI_SMALL static void autosave_resume(void)              /* power-on: the project as it was left (felucca_init) */
 {
-#if FELUCCA_FLASH
+#if FELUCCA_FLASH && !SIREN                    /* (SIREN keeps no project: siren.c sets its parts) */
     project_t *q = &autosave_buf;
     int n;
     if (!flash_ok)
@@ -984,7 +984,7 @@ UI_SMALL static void autosave_resume(void)              /* power-on: the project
     proj_x10_load(OBJ_AUTOSAVE, q);                    /* (after Clipper 1.2) its 1.0 block */
     autosave_hash = proj_sig(q);
     proj_apply(q, 1);
-    song.sel = (uint8_t)(q->sel < NTRK && !CLIPPER_SYNTH ? q->sel : 0u);
+    song.sel = (uint8_t)(q->sel < PROJ_T && !CLIPPER_SYNTH ? q->sel : 0u);
     for (n = 0; n < NPART; n++)
         trk[n].engine = trk[n].eng_req;        /* (nothing sounds yet: no fade) */
 #endif

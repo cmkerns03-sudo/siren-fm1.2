@@ -83,7 +83,7 @@ static inline int32_t bus_lp(int32_t x8, int32_t *s, int32_t k)
     return y;
 }
 
-static int32_t bus_db(int32_t v, int32_t centre) { return clamp(v - centre, -12, 12) + 12; }   /* -> 0..24 */
+static int32_t bus_db(int32_t v, int32_t centre) { return SIREN ? 12 : clamp(v - centre, -12, 12) + 12; }   /* -> 0..24 (SIREN: flat, its slots are the drums' level and send) */
 
 static void bus_eq(int32_t *l, int32_t *r, uint32_t n)
 {

@@ -25,6 +25,9 @@
 #include "voice.c"
 #include "slicer.c"          /* per-track SLICER insert, used by fx.c */
 #include "fx.c"
+#if SIREN
+#include "siren.c"            /* SIREN: the brain and its sound (siren_brain.c, siren_data.h) */
+#endif
 #ifndef FELUCCA_OTA
 #define FELUCCA_OTA 1            /* M-UPGRADE update entry; needs FELUCCA_FLASH */
 #endif
@@ -68,6 +71,9 @@
 #include "ui_layers.c"       /* hold a function button: what the keys and knobs do (TE style) */
 #include "ui_menu.c"
 #include "ui_input.c"
+#if SIREN
+#include "siren_ui.c"         /* SIREN: its screen and controls */
+#endif
 #ifndef FELUCCA_FLASH
 #define FELUCCA_FLASH 1          /* flash driver + storage.c */
 #endif

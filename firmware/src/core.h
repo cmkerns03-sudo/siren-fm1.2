@@ -9,6 +9,15 @@
 /* Clipper: a synthesizer, one instrument (track 1: song.sel is always 0). Tracks 2..4 and the drum machine stay in
  * the data (the project formats are SLOOP's) but are silent, never selected, their sequencers stopped; MIDI plays the
  * instrument on every channel. 0 = SLOOP's four-track groovebox (the host tests of the shared code build it). */
+/* SIREN: a rave that writes itself (siren.c), on Clipper's engines: six synth parts (bass, arp, hook, pad, stabs, fx)
+ * and the drum track, played by SIREN's brain (siren_brain.c) instead of the sequencer; its own screen and controls */
+#ifndef SIREN
+#define SIREN 0
+#endif
+#if SIREN
+#undef CLIPPER_SYNTH
+#define CLIPPER_SYNTH 1
+#endif
 #ifndef CLIPPER_SYNTH
 #define CLIPPER_SYNTH 1
 #endif
@@ -20,9 +29,16 @@ static volatile uint32_t diag_peak;      /* the worst half (render + TIMER5 in i
 #define NVOICE 8                 /* voices per part, and the budget shared by all parts (Clipper: -DNVOICE=12 / 16) */
 #endif
 #define NPOLY NVOICE
+#if SIREN
+#define NPART 6                  /* SIREN: bass, arp, hook, pad, stabs, fx */
+#define NTRK 7
+#define TRK_DRUM 6
+#else
 #define NPART 3                  /* synth parts: tracks 1..3 */
 #define NTRK 4                   /* + the drum track */
 #define TRK_DRUM 3
+#endif
+#define PROJ_T 4                 /* the tracks a project holds (its format: SLOOP's; SIREN keeps no projects) */
 enum { V_POLY, V_MONO, V_LEGATO, V_UNISON, V_PUNI2, V_PUNI4 };   /* P_VOICE (Clipper 0.3: UNI2 / UNI4, poly unison) */
 static inline int voice_poly(int m) { return m == V_POLY || m >= V_PUNI2; }   /* a note per key, its own voices */
 #define NSTEP 64
@@ -37,7 +53,7 @@ static inline int voice_poly(int m) { return m == V_POLY || m >= V_PUNI2; }   /*
 #if FELUCCA_SLICE
 #error "SLICE is a groovebox engine (CLIPPER_SYNTH 0)"
 #endif
-#define CLIPPER_NENG 10          /* WAVE ACID STRINGS MACRO VPS TERRAIN FMX WSEQ JUNO VECTOR */
+#define CLIPPER_NENG 11          /* WAVE ACID STRINGS MACRO VPS TERRAIN FMX WSEQ JUNO VECTOR WOB */
 #define NENGINES (13 + CLIPPER_NENG)
 #define ENGI_WAVE 13u            /* Clipper 0.2: wavetables (eng_wave.c) */
 #define ENGI_ACID 14u            /*   a 303-style bass line (eng_acid.c) */
@@ -49,6 +65,7 @@ static inline int voice_poly(int m) { return m == V_POLY || m >= V_PUNI2; }   /*
 #define ENGI_WSEQ 20u            /*   wave sequencing (eng_wseq.c, after the Wavestation) */
 #define ENGI_JUNO 21u            /* Clipper 0.8: the Juno poly and its chorus (eng_juno.c, fx.c juno_chorus) */
 #define ENGI_VECTOR 22u          /*   vector synthesis: four waves, a joystick (eng_vector.c, after the Prophet VS) */
+#define ENGI_WOB 23u             /* SIREN: the dubstep bass, its wobble from SIREN's brain (eng_wob.c) */
 #else
 #define NENGINES (13 + FELUCCA_SLICE)
 #endif
@@ -529,7 +546,7 @@ static int is_drum(const track_t *t) { return t == TDRUM; }
 static int trk_silent(const track_t *t)
 {
     uint32_t i = (uint32_t)(t - trk);
-    if (CLIPPER_SYNTH && i)      /* Clipper: only the instrument (track 1) sounds, and its layer (track 2) when on */
+    if (CLIPPER_SYNTH && !SIREN && i)   /* Clipper: only the instrument (track 1) sounds, and its layer (track 2) when on */
         return i != 1u || (trk[1].p[P_LYMODE] != LY_LAYER && trk[1].p[P_LYMODE] != LY_SPLIT && trk[1].p[P_LYMODE] != LY_MULTI);
     return t->p[P_MUTE] || (song.solo && !((song.solo >> i) & 1u));
 }
@@ -538,3 +555,10 @@ static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIME
 /* Two early failed boots -> USB recovery; recovery reset -> mask-ROM UBOOT. */
 #include "bootguard.h"
 bootguard_t bootguard __attribute__((section(".noinit")));
+#if SIREN                        /* SIREN (siren.c): what the mix (fx.c) and the clock (seq.c) call */
+static void siren_block(uint32_t n, uint32_t adv);
+static void siren_mix(int32_t *l, int32_t *r, uint32_t n);
+static int32_t siren_duck_depth(void);
+static int32_t siren_gain_q12(void);
+static void siren_scope_tap(void);
+#endif

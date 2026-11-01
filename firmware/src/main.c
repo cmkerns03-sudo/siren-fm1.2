@@ -221,6 +221,10 @@ static void fm1_main(void)
     fm1_adc_init();
     panel_init();
     felucca_init();
+#if SIREN
+    siren_init();                                       /* SIREN: its parts, its brain (siren.c) */
+    siren_ui_init();
+#endif
     cpu1_boot();                                        /* (0.7) the second core: at power-on, before the audio and the
                                                          * timers (X0X: started later it never reaches its entry);
                                                          * if it does not answer, Clipper runs on one core (cpu1.c) */
@@ -343,18 +347,26 @@ static void fm1_main(void)
         felucca_dbg.page = ui.page;
         felucca_dbg.home = ui.home;
         felucca_dbg.stage = 1;
+#if SIREN
+        siren_frame();                                  /* SIREN: the controls, the sounds asked for, the lights, the sea */
+#else
         ui_input();
         felucca_dbg.stage = 2;
         ui_leds();
         ui_draw();
         felucca_dbg.stage = 8;
         autosave_tick();                                /* the working project into flash, when quiet */
+#endif
 #if FELUCCA_ARRANGER
         sections_flush();                               /* live sections / the recorded song, when quiet */
 #endif
         felucca_dbg.stage = 9;
         while (fm1_ms - m < 15u) {                               /* ~60 UI frames/s at most */
+#if SIREN
+            siren_input();
+#else
             ui_input();
+#endif
 #if FELUCCA_OTA
             ed_service();                       /* editor replies without waiting for the next frame */
 #endif
