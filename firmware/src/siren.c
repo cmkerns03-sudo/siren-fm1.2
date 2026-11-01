@@ -212,7 +212,7 @@ static int32_t siren_gain_q12(void) { return sr.gain_q12; }
 static void siren_scope_tap(void)                /* (mix_block: the visualiser's taps, for the screen) */
 {
     uint32_t i;
-    for (i = 0; i < CTL; i += 2u) { sr.scope[sr.sw % 512u] = vis_tap[2u * i]; sr.sw++; }
+    for (i = 1; i < CTL; i += 2u) { sr.scope[sr.sw % 512u] = vis_tap[2u * i]; sr.sw++; }   /* (mix_block writes the odd samples) */
 }
 
 /* ---- the main loop's side: the sounds the brain picked, applied (an engine and a preset per part), the kit */
