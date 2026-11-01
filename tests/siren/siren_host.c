@@ -29,7 +29,7 @@ int main(int argc, char **argv)
     printf("siren: %s %s\n", SB_STYLE_NAMES[style], code);
     for (b = 0; b < blocks; b++) {
         if (dive >= 0 && b == (uint32_t)dive * FS / CTL) siren_cmd(SC_DIVE, 4, 0, 0);
-        if (b % 300 == 0) siren_service();                       /* (the main loop, every ~200 ms here) */
+        if (b % 20 == 0) siren_service();                        /* (the main loop: a frame, ~15 ms) */
         t0 = now_ns();
         mix_block_svc(out, CTL);
         t0 = now_ns() - t0; ns += t0; if (t0 > worst) worst = t0;

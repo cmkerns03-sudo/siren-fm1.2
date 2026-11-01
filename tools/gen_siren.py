@@ -10,7 +10,7 @@
 import json, sys
 from pathlib import Path
 D = Path(__file__).with_name('siren')
-STY = ['TECHNO', 'TRANCE', 'PSY', 'ACID', 'RAVE', 'HARD', 'DNB', 'DUBSTEP']
+STY = ['TECHNO', 'TRANCE', 'PSY', 'ACID', 'RAVE', 'HARD', 'DNB', 'HOUSE']
 LAY = ['DRUMS', 'BASS', 'ARP', 'HOOK', 'PAD', 'STAB', 'FX']
 cur = json.loads((D / 'curation.json').read_text()); kits = json.loads((D / 'kits.json').read_text())
 # (0.2) the engines a set can afford on the FM-1, six parts at once: no GRAIN, VPS, MACRO, VECTOR, STRINGS, TERRAIN, PHYS,

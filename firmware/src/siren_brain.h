@@ -5,7 +5,7 @@
 #pragma once
 #include <stdint.h>
 
-enum { SB_TECHNO, SB_TRANCE, SB_PSY, SB_ACID, SB_RAVE, SB_HARD, SB_DNB, SB_DUBSTEP, SB_NSTYLES };
+enum { SB_TECHNO, SB_TRANCE, SB_PSY, SB_ACID, SB_RAVE, SB_HARD, SB_DNB, SB_HOUSE, SB_NSTYLES };
 enum { SEC_INTRO, SEC_GROOVE, SEC_BUILD, SEC_DROP, SEC_BREAK, SEC_PEAK, SEC_OUTRO };
 /* the layers: the drums, the six melodic ones (their sounds picked from the style's selection), and the sub */
 enum { L_DRUMS, L_BASS, L_ARP, L_HOOK, L_PAD, L_STAB, L_FX, L_SUB, SB_NLAYERS };

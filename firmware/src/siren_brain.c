@@ -49,10 +49,10 @@ enum { SBHM_16, SBHM_OFF8, SBHM_8, SBHM_16GAP };
 /* the drum lanes: GM notes */
 enum { SBD_KICK = 36, SBD_KICK2 = 35, SBD_SNARE = 38, SBD_CLAP = 39, SBD_HAT = 42, SBD_OPEN = 46, SBD_RIM = 37, SBD_SNARE2 = 40, SBD_TOML = 43,
        SBD_TOMH = 48, SBD_CRASH = 49, SBD_RIDE = 51, SBD_SHAKE = 70, SBD_CONGA = 63, SBD_BELL = 56, SBD_CLAVE = 75 };
-const char *const SB_STYLE_NAMES[SB_NSTYLES] = { "TECHNO", "TRANCE", "PSY", "ACID", "RAVE", "HARD", "DNB", "DUBSTEP" };
+const char *const SB_STYLE_NAMES[SB_NSTYLES] = { "TECHNO", "TRANCE", "PSY", "ACID", "RAVE", "HARD", "DNB", "HOUSE" };
 const char *const SB_SEC_NAMES[7] = { "INTRO", "GROOVE", "BUILD", "DROP", "BREAK", "PEAK", "OUTRO" };
 static const int16_t SB_SEC_E[7] = { 250, 550, 750, 1000, 300, 920, 320 };
-static const uint8_t SB_STYLE_ORDER[SB_NSTYLES] = { SB_TECHNO, SB_ACID, SB_TRANCE, SB_PSY, SB_HARD, SB_RAVE, SB_DNB, SB_DUBSTEP };
+static const uint8_t SB_STYLE_ORDER[SB_NSTYLES] = { SB_HOUSE, SB_TECHNO, SB_ACID, SB_TRANCE, SB_PSY, SB_HARD, SB_RAVE, SB_DNB };
 
 typedef struct { uint8_t sec, a, b; } sb_shp_t;
 typedef struct { const sb_shp_t *s; uint8_t n; } sb_shape_t;
@@ -65,8 +65,7 @@ static const sb_shp_t SB_SH_TRANCE[] = { {SEC_INTRO, 2, 2}, {SEC_GROOVE, 2, 3}, 
 static const sb_shp_t SB_SH_PSY[] = { {SEC_INTRO, 1, 1}, {SEC_GROOVE, 4, 6}, {SEC_BUILD, 1, 1}, {SEC_DROP, 4, 6}, {SEC_BREAK, 1, 1}, {SEC_DROP, 2, 3}, {SEC_OUTRO, 1, 1} };
 static const sb_shp_t SB_SH_ACID[] = { {SEC_INTRO, 1, 2}, {SEC_GROOVE, 4, 6}, {SEC_BREAK, 1, 1}, {SEC_BUILD, 1, 1}, {SEC_DROP, 4, 6}, {SEC_OUTRO, 1, 2} };
 static const sb_shp_t SB_SH_DNB[] = { {SEC_INTRO, 2, 2}, {SEC_BUILD, 1, 1}, {SEC_DROP, 4, 5}, {SEC_BREAK, 1, 2}, {SEC_BUILD, 1, 1}, {SEC_DROP, 4, 5}, {SEC_OUTRO, 1, 2} };
-static const sb_shp_t SB_SH_DUB0[] = { {SEC_INTRO, 2, 2}, {SEC_BUILD, 1, 1}, {SEC_DROP, 2, 3}, {SEC_BREAK, 2, 2}, {SEC_BUILD, 1, 1}, {SEC_DROP, 3, 4}, {SEC_OUTRO, 1, 1} };
-static const sb_shp_t SB_SH_DUB1[] = { {SEC_INTRO, 1, 2}, {SEC_GROOVE, 1, 1}, {SEC_BUILD, 1, 1}, {SEC_DROP, 3, 3}, {SEC_BREAK, 1, 2}, {SEC_BUILD, 1, 1}, {SEC_DROP, 3, 3}, {SEC_PEAK, 1, 1}, {SEC_OUTRO, 1, 1} };
+static const sb_shp_t SB_SH_HOUSE[] = { {SEC_INTRO, 2, 2}, {SEC_GROOVE, 3, 4}, {SEC_BREAK, 1, 2}, {SEC_BUILD, 1, 1}, {SEC_DROP, 4, 5}, {SEC_GROOVE, 1, 2}, {SEC_OUTRO, 1, 2} };
 
 typedef struct { uint8_t n, c[4]; } sb_prog_t;
 typedef struct {
@@ -98,9 +97,9 @@ static const sb_style_t SB_STY[SB_NSTYLES] = {
     /* DNB */    { 0, GR_DNB, 0, 1, 850, 0, 0, 170, 176, 2, {SB_MINOR, SB_DORIAN}, 4, {{4, {0, 5, 3, 4}}, {2, {0, 3}}, {4, {0, 6, 5, 4}}, {4, {0, 0, 5, 6}}}, 2,
                  3, {SBBK_ROLLER, SBBK_REESE, SBBK_ROLLER}, 0, {500, 500, 900, 450, 1000, 0}, 6, 10, 700, SBD_SNARE, 2, {SBD_RIM, SBD_SHAKE}, 2, {SBHM_8, SBHM_16GAP},
                  2, {SB_SHAPE(SB_SH_DNB), SB_SHAPE(SB_SH0)} },
-    /* DUBSTEP */{ 0, GR_HALF, 0, 1, 1000, 1, 0, 140, 140, 3, {SB_PHRYGIAN, SB_MINOR, SB_HARMONIC}, 4, {{1, {0}}, {4, {0, 0, 5, 6}}, {2, {0, 1}}, {4, {0, 0, 6, 0}}}, 4,
-                 4, {SBBK_WOBBLE, SBBK_RIDDIM, SBBK_GROWL, SBBK_WOBBLE}, 0, {300, 600, 850, 300, 1000, 0}, 4, 6, 200, SBD_SNARE, 2, {SBD_RIM, SBD_SHAKE}, 2, {SBHM_8, SBHM_16GAP},
-                 2, {SB_SHAPE(SB_SH_DUB0), SB_SHAPE(SB_SH_DUB1)} },
+    /* HOUSE */  { 0, GR_FOUR, 0, 1, 0, 0, 0, 122, 126, 2, {SB_MINOR, SB_DORIAN}, 4, {{2, {0, 3}}, {4, {0, 5, 2, 6}}, {4, {0, 3, 6, 4}}, {4, {0, 0, 3, 3}}}, 2,
+                 3, {SBBK_OFFBEAT, SBBK_PULSE, SBBK_OFFBEAT}, 70, {350, 800, 800, 950, 900, 0}, 4, 9, 500, SBD_CLAP, 3, {SBD_SHAKE, SBD_CONGA, SBD_CLAVE}, 3, {SBHM_OFF8, SBHM_16, SBHM_16GAP},
+                 3, {SB_SHAPE(SB_SH1), SB_SHAPE(SB_SH_HOUSE), SB_SHAPE(SB_SH0)} },
 };
 static int sb_euclid(int k, int n, int rot, int i) { return (((i + n - (rot % n)) * k) % n) < k; }
 static int sb_has(const uint8_t *a, int n, int x) { int i; for (i = 0; i < n; i++) if (a[i] == x) return 1; return 0; }

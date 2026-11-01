@@ -2,7 +2,7 @@
 import json, sys
 from pathlib import Path; P = str(Path(__file__).resolve().parents[2] / 'tools' / 'siren') + '/'
 cur = json.load(open(P + 'curation.json')); kits = json.load(open(P + 'kits.json'))
-STY = ['TECHNO', 'TRANCE', 'PSY', 'ACID', 'RAVE', 'HARD', 'DNB', 'DUBSTEP']; LAY = ['DRUMS', 'BASS', 'ARP', 'HOOK', 'PAD', 'STAB', 'FX', 'SUB']
+STY = ['TECHNO', 'TRANCE', 'PSY', 'ACID', 'RAVE', 'HARD', 'DNB', 'HOUSE']; LAY = ['DRUMS', 'BASS', 'ARP', 'HOOK', 'PAD', 'STAB', 'FX', 'SUB']
 fm1 = lambda k: '/' not in k or k.startswith('siren/')
 n = {s: {L: len([k for k in cur[s].get(L, []) if fm1(k)]) for L in LAY} for s in STY}
 o = ['static const uint16_t KN16[][2] = {']; first = []; i = 0

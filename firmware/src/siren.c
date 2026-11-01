@@ -5,7 +5,7 @@
  * (events_block calls siren_block instead of the sequencer). Each track a sound picked by the brain from the style's
  * selection (siren_data.h, tools/gen_siren.py); the drums SIREN's own kits in the drum synth's first user kit, the kick
  * tuned to the key; the mix as on the prototype: the kick's duck, the build's high-pass on the master, the sends, the
- * WOB's wobble, the sub under a dubstep or drum & bass bass. The main loop applies the sounds the brain asks for
+ * WOB's wobble, the sub under a drum & bass bass. The main loop applies the sounds the brain asks for
  * (siren_service) and runs the screen and the controls (siren_ui.c). Commands from the main loop to the brain go
  * through a ring (the brain runs in the interrupt only). */
 #include "siren_brain.c"
@@ -24,7 +24,7 @@ static const int8_t SIREN_MIX[6][4] = {
 };
 /* each style's drums: level (x/100), reverb send, delay send (the drum track's), the rumble */
 static const uint8_t SIREN_DMIX[SB_NSTYLES][3] = {
-    {100, 12, 6}, {100, 30, 8}, {95, 12, 12}, {100, 8, 4}, {100, 16, 6}, {100, 18, 6}, {100, 14, 6}, {104, 28, 4},
+    {100, 12, 6}, {100, 30, 8}, {95, 12, 12}, {100, 8, 4}, {100, 16, 6}, {100, 18, 6}, {100, 14, 6}, {100, 22, 8},   /* (.. DNB, HOUSE) */
 };
 
 static sb_brain_t sb;
@@ -64,8 +64,9 @@ static struct {
     int8_t eqk[3];                               /* the isolator: the master EQ's bands (bus.c, 12 flat .. 0 -12 dB) */
     int32_t spd_q12, bend, gate_q12;             /* the clock's speed (BRAKE, HALF), the parts' pitch, the gate */
     int32_t nz, nz1, nz2, nz_lvl;        /* the riser's noise */
+    volatile int8_t q_style; uint8_t q_now;      /* (0.3) the style asked for, on the next phrase (-1 none); now */
 } sr;
-enum { SC_PLAY, SC_STOP, SC_KNOB, SC_DIVE, SC_BREAK, SC_STYLE, SC_SEED, SC_REROLL, SC_LOCK, SC_STYLELOCK, SC_PUNCH };
+enum { SC_PLAY, SC_STOP, SC_KNOB, SC_DIVE, SC_BREAK, SC_STYLE, SC_SEED, SC_REROLL, SC_LOCK, SC_STYLELOCK, SC_PUNCH, SC_STYLEQ };
 
 /* the main loop's way into the brain */
 static void siren_cmd(uint32_t op, int32_t a, int32_t b, uint32_t c)
@@ -107,7 +108,7 @@ static const siren_px_t SIREN_PX[SB_NSTYLES][16] = {
     {SPX_COMMON, {SPX_PROLL, 1, "PITCH ROLL"}, {SPX_BRAKE, 0, "BRAKE"}, {SPX_CRUSH, 0, "CRUSH"}, {SPX_RISER, 0, "RISER"}},     /* RAVE */
     {SPX_COMMON, {SPX_CRUSH, 0, "CRUSH"}, {SPX_STRIP, 0, "KICK+BASS"}, {SPX_PROLL, 1, "PITCH ROLL"}, {SPX_CUT, 0, "CUT"}},      /* HARD */
     {SPX_COMMON, {SPX_REWIND, 0, "REWIND"}, {SPX_HALF, 0, "HALF TIME"}, {SPX_DROLL, 1, "DRUM ROLL"}, {SPX_CRUSH, 0, "CRUSH"}}, /* DNB */
-    {SPX_COMMON, {SPX_BRAKE, 0, "BRAKE"}, {SPX_HALF, 0, "HALF TIME"}, {SPX_REWIND, 0, "REWIND"}, {SPX_CRUSH, 0, "CRUSH"}},     /* DUBSTEP */
+    {SPX_COMMON, {SPX_STRIP, 0, "KICK+BASS"}, {SPX_DUB, 6, "DUB ECHO"}, {SPX_DROLL, 1, "DRUM ROLL"}, {SPX_CUT, 0, "CUT"}},       /* HOUSE */
 };
 #define SPX_ALL 0xFFu
 #define SPX_MELO ((1u << L_ARP) | (1u << L_HOOK) | (1u << L_PAD) | (1u << L_STAB) | (1u << L_FX))
@@ -258,6 +259,7 @@ static void siren_commands(void)                 /* (audio interrupt) */
         case SC_LOCK: sb_lock(&sb, a, b); break;
         case SC_STYLELOCK: sb.style_lock = (uint8_t)a; break;
         case SC_PUNCH: if (a < 0) siren_px_end(); else siren_px_start((uint32_t)a); break;
+        case SC_STYLEQ: if (a == sr.q_style) sr.q_now = 1; else { sr.q_style = (int8_t)a; sr.q_now = 0; } break;   /* (twice: now) */
         }
         sr.cr++;
     }
@@ -328,7 +330,13 @@ static void siren_replay(uint32_t k, uint32_t len16, uint32_t u16)
 static void siren_fire(void)
 {
     sb_events_t *ev = &sr.ev;
-    uint32_t i, u16 = BEAT_U / 4u, s = sr.n16++, npad = 0, nstab = 0, roll;
+    uint32_t i, u16 = BEAT_U / 4u, s, npad = 0, nstab = 0, roll;
+    if (sr.q_style >= 0 && (sr.q_now || (sb.step == 0 && sb.phrase_bar == 0))) {   /* (0.3) the style asked for: on the */
+        int st = sr.q_style;                                                     /* phrase, as a DJ mixes in (or now) */
+        sr.q_style = -1; sr.q_now = 0;
+        siren_px_end(); siren_all_off(); sb_set_seed(&sb, sb.seed, st);
+    }
+    s = sr.n16++;
     sb_step16(&sb, ev);
     song.g[G_BPM] = ev->bpm;
     {   /* (0.2) the CPU guard, from the audio interrupt's own load (Q8, 256 = all of it) */
@@ -531,7 +539,7 @@ static void siren_init(void)
     sb_init(&sb, &sb_pal);
     for (i = 0; i < 7u; i++) sr.applied[i] = -1, sr.applied_style[i] = -1;
     sr.ap_kick = -1; sr.gain_q12 = 4096;
-    sr.spd_q12 = 4096; sr.gate_q12 = 4096; sr.eqk[0] = sr.eqk[1] = sr.eqk[2] = 12; sr.nz = 0x5EED; sr.px = SPX_NONE;
+    sr.spd_q12 = 4096; sr.gate_q12 = 4096; sr.eqk[0] = sr.eqk[1] = sr.eqk[2] = 12; sr.nz = 0x5EED; sr.px = SPX_NONE; sr.q_style = -1;
     for (i = 0; i < NTRK; i++) {
         trk[i].p[P_MUTE] = 0;
         trk[i].p[P_AMODE] = 0;

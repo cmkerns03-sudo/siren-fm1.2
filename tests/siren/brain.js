@@ -53,13 +53,13 @@
     // DRUM & BASS: the two-step, rolling basslines (reese and sub), liquid pads and bells
     DNB: { breakDrums: 0, groove: 'dnb', rumble: 0, kitTune: 1, sub: 850, dropBass: 0, gallop: 0, bpm: [170, 176], scales: ['minor', 'dorian'], progs: [[0, 5, 3, 4], [0, 3], [0, 6, 5, 4], [0, 0, 5, 6]], chordBars: 2, bass: ['roller', 'reese', 'roller'], swing: 0, layers: [500, 500, 900, 450, 1000, 0], hats: [6, 10], ride: 700, roll: 'snare', percLanes: ['rim', 'shake'], hatModes: ['8', '16gap'],
       shapes: [[['INTRO', 2, 2], ['BUILD', 1, 1], ['DROP', 4, 5], ['BREAK', 1, 2], ['BUILD', 1, 1], ['DROP', 4, 5], ['OUTRO', 1, 2]], SHAPES[0]] },
-    // DUBSTEP: half time at 140, the bass is the lead: wobbles and growls (rates switching inside the riff), a sub under
-    // them, the bass changing its sound every few bars of a drop, the snare on 3
-    DUBSTEP: { breakDrums: 0, groove: 'half', rumble: 0, kitTune: 1, sub: 1000, dropBass: 1, gallop: 0, bpm: [140, 140], scales: ['phrygian', 'minor', 'harmonic'], progs: [[0], [0, 0, 5, 6], [0, 1], [0, 0, 6, 0]], chordBars: 4, bass: ['wobble', 'riddim', 'growl', 'wobble'], swing: 0, layers: [300, 600, 850, 300, 1000, 0], hats: [4, 6], ride: 200, roll: 'snare', percLanes: ['rim', 'shake'], hatModes: ['8', '16gap'],
-      shapes: [[['INTRO', 2, 2], ['BUILD', 1, 1], ['DROP', 2, 3], ['BREAK', 2, 2], ['BUILD', 1, 1], ['DROP', 3, 4], ['OUTRO', 1, 1]], [['INTRO', 1, 2], ['GROOVE', 1, 1], ['BUILD', 1, 1], ['DROP', 3, 3], ['BREAK', 1, 2], ['BUILD', 1, 1], ['DROP', 3, 3], ['PEAK', 1, 1], ['OUTRO', 1, 1]]] },
+    // HOUSE: four to the floor with swing, the clap on 2 and 4, the open hat on the offbeat, shakers and congas;
+    // minor and dorian chords that move (piano, organ), a bass that bounces, a long groove then a breakdown and a drop
+    HOUSE: { breakDrums: 0, groove: 'four', rumble: 0, kitTune: 1, sub: 0, dropBass: 0, gallop: 0, bpm: [122, 126], scales: ['minor', 'dorian'], progs: [[0, 3], [0, 5, 2, 6], [0, 3, 6, 4], [0, 0, 3, 3]], chordBars: 2, bass: ['offbeat', 'pulse', 'offbeat'], swing: 70, layers: [350, 800, 800, 950, 900, 0], hats: [4, 9], ride: 500, roll: 'clap', percLanes: ['shake', 'conga', 'clave'], hatModes: ['off8', '16', '16gap'],
+      shapes: [SHAPES[1], [['INTRO', 2, 2], ['GROOVE', 3, 4], ['BREAK', 1, 2], ['BUILD', 1, 1], ['DROP', 4, 5], ['GROOVE', 1, 2], ['OUTRO', 1, 2]], SHAPES[0]] },
   };
   const STYLE_NAMES = Object.keys(STYLES);
-  const STYLE_ORDER = ['TECHNO', 'ACID', 'TRANCE', 'PSY', 'HARD', 'RAVE', 'DNB', 'DUBSTEP'];   // (neighbours by tempo and family)
+  const STYLE_ORDER = ['HOUSE', 'TECHNO', 'ACID', 'TRANCE', 'PSY', 'HARD', 'RAVE', 'DNB'];   // (neighbours by tempo and family)
   // the sections of a track: their energy (per mille)
   const SEC_E = { INTRO: 250, GROOVE: 550, BUILD: 750, DROP: 1000, BREAK: 300, PEAK: 920, OUTRO: 320 };
   // the drum kit's lanes (GM notes: kick, kick2, snare, clap, hat, open, pedal, rim, snr 2, tom l, tom h, crash, ride, shake, conga, bell, clave)

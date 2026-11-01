@@ -9,15 +9,16 @@
  *                   7 ECHO OUT, 8 WASH OUT, 9-11 KILL LOW MID HIGH, 12 GATE, 13-16 the style's own (siren.c SIREN_PX)
  *                   (FX alone, let go without a key: DIVE)
  *   ENV             BREAK                                                    LFO   keep this style (the set stays in it)
- *   REC             a new seed (a new rave)                                  HOME  the sea / the info screen
+ *   REC             a new seed (a new rave)                                  HOME  the deck / the effects page
  *   white keys 1-7  the layers on / off: DRUMS BASS ARP HOOK PAD STABS FX
- *   white keys 9-16 the style: TECHNO TRANCE PSY ACID RAVE HARD DRUM&BASS DUBSTEP
+ *   white keys 9-16 the style: TECHNO TRANCE PSY ACID RAVE HARD DRUM&BASS HOUSE (0.3: playing, it comes in on the
+ *                   next 8-bar phrase, as a DJ mixes; the same key again: at once)
  *   SEQ + key 1-7   reroll that layer (another sound, another pattern)       EDIT + key 1-7  keep that layer (lock)
  *   SAVE + key      keep the seed playing in that slot                       SEL + key       play the seed kept there
  *
- * The screen: the sea (the kick's rings, the mix in four circles in the family's colours, each note a spark on a
- * spiral, the eye; a build pulls it in and spins it, a drop flashes it white), the style, seed, section and tempo; or
- * the info screen (the layers and their sounds, the knobs, the CPU). */
+ * The screen (0.3): a DJ's deck (siren_draw.c): style, key, tempo, the beat; the track's plan and what comes next, when;
+ * the seven layers, their sounds and meters; the knobs; the effect held and the load. HOME: the 16 effects of the
+ * style. PLAY blinks on the beat; FX held lights the effect keys. */
 #include "siren_draw.c"
 
 /* SIREN on the FM-1: a part's sound from the brain's pick, as the preset browser loads one (ui.c) */
@@ -95,8 +96,9 @@ static void siren_input(void)
             else if (su_held(B_EDIT)) { su.locks[k] ^= 1u; siren_cmd(SC_LOCK, (int32_t)k, su.locks[k], 0); su_message(su.locks[k] ? "LOCKED" : "FREE"); }
             else { sr.mute[k] ^= 1u; if (k == 1u) sr.mute[L_SUB] = sr.mute[k]; }
         } else if (k >= 8u) {
-            su.style = (uint8_t)(k - 8u);
-            siren_cmd(SC_STYLE, su.style, 0, 0);
+            su.style = (uint8_t)(k - 8u);                    /* (0.3) on the next phrase; the same key again: now */
+            if (!sr.playing) siren_cmd(SC_STYLE, su.style, 0, 0);
+            else siren_cmd(SC_STYLEQ, su.style, 0, 0);
             su_message(SU_STYLE[su.style]);
         }
     }
@@ -109,13 +111,18 @@ static void siren_leds(void)
     uint32_t k, c;
     static uint8_t ready;
     if (!ready) { led_pos_init(); ready = 1; }
-    led_put(nl, panel.btn[B_PLAY], sr.playing);
+    led_put(nl, panel.btn[B_PLAY], sr.playing && sr.ev.step % 4u < 2u);   /* (0.3) on the beat, as a CDJ's */
     led_put(nl, panel.btn[B_LFO], su.lock_style);
     led_put(nl, panel.btn[B_HOME], su.info);
-    for (k = 0; k < 7u; k++)
-        led_put(sr.mute[k] ? dl : nl, 14u + SU_WHITE[k], 1);
-    led_put(nl, 14u + SU_WHITE[8u + sb.style % 8u], 1);
-    if (su.px_key >= 0) led_put(nl, 14u + SU_WHITE[su.px_key], 1);   /* (0.2) the effect held */
+    if (su.fx_was || su.px_key >= 0) {                              /* (0.3) FX held: the 16 effect keys, dim; the one held */
+        for (k = 0; k < 16u; k++) led_put(dl, 14u + SU_WHITE[k], 1);
+        if (su.px_key >= 0) led_put(nl, 14u + SU_WHITE[su.px_key], 1);
+    } else {
+        for (k = 0; k < 7u; k++)
+            led_put(sr.mute[k] ? dl : nl, 14u + SU_WHITE[k], 1);
+        led_put(nl, 14u + SU_WHITE[8u + sb.style % 8u], 1);
+        if (sr.q_style >= 0) led_put(dl, 14u + SU_WHITE[8u + (uint32_t)sr.q_style % 8u], 1);   /* (0.3) the style to come */
+    }
     led_put(nl, panel.btn[B_FX], su.fx_was);
     for (c = 0; c < FM1_NCOL; c++) { fm1_led[c] = nl[c]; fm1_led_dim[c] = dl[c]; fm1_led_bg[c] = 0; }
 }
