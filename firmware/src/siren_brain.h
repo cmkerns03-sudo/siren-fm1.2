@@ -70,6 +70,7 @@ void sb_set_seed(sb_brain_t *b, uint32_t seed, int style);   /* style -1: keep *
 void sb_step16(sb_brain_t *b, sb_events_t *ev);
 void sb_reroll(sb_brain_t *b, int layer);
 void sb_lock(sb_brain_t *b, int layer, int on);
+void sb_rewind(sb_brain_t *b);                               /* (0.2) the section from its first beat */
 void sb_knob(sb_brain_t *b, int k, int v);                   /* per mille */
 void sb_code(uint32_t seed, char out[9]);                    /* "XXX-XXXX" */
 uint32_t sb_uncode(const char *c);

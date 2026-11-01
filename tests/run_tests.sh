@@ -152,6 +152,9 @@ $SIR -o "$OUT/siren_wob" tests/siren/wob_test.c -lm -lpthread
 run "SIREN: WOB (each type: bounded, the pitch, the wobble heard; random patches)" "$OUT/siren_wob"
 $SIR -DNVOICE=8 -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -o "$OUT/siren_host" tests/siren/siren_host.c -lm -lpthread
 run "SIREN: every style through the firmware's audio path (sanitizers)" sh -c 'for st in 0 1 2 3 4 5 6 7; do "$0" $st S1R-3N00 20 /dev/null 3 >/dev/null || exit 1; done' "$OUT/siren_host"
+$SIR -DNVOICE=8 -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -o "$OUT/siren_dj" tests/siren/dj_test.c -lm -lpthread
+mkdir -p build/siren_dj
+run "SIREN 0.2: the DJ's effects, every style and key (back where it was after; kills, cut, rolls), the CPU guard (sanitizers)" "$OUT/siren_dj" build/siren_dj
 $SYN -o "$OUT/engines2_test" tests/engines2_test.c -lm
 mkdir -p build/eng2_demo
 run "Clipper 0.2 ACID (accent, sweep, slide), STRINGS (registers, ensemble), MACRO (chords, swarm, additive, speech, LPG)" "$OUT/engines2_test" build/eng2_demo

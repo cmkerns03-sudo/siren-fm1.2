@@ -15,6 +15,7 @@ static struct {
     int16_t knob[4];
     uint32_t fav[16]; uint8_t fav_set[16];
     uint8_t locks[7];
+    uint8_t fx_was, fx_used; int8_t px_key;     /* (0.2) FX held, a key played with it, the effect's key (-1) */
     uint32_t frame, kicks_seen, notes_seen, seq_seen, flash;
     struct { uint8_t age, e; } ring[6];
     struct { uint8_t age, layer, note; uint16_t a; } spark[24];

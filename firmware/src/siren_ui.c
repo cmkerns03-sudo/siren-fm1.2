@@ -5,6 +5,9 @@
  *   PLAY            start / stop
  *   KNOB 1 .. 4     ENERGY, DENSITY, TENSION, MUTATION
  *   FX              DIVE: a 4-bar build from the next bar, then the drop     ARP   DIVE 16: a 16-bar build
+ *   FX + white key  (0.2) the DJ's effects, while the key is held: 1-4 ROLL 1/4 1/8 1/16 1/32, 5 LOW PASS, 6 HIGH PASS,
+ *                   7 ECHO OUT, 8 WASH OUT, 9-11 KILL LOW MID HIGH, 12 GATE, 13-16 the style's own (siren.c SIREN_PX)
+ *                   (FX alone, let go without a key: DIVE)
  *   ENV             BREAK                                                    LFO   keep this style (the set stays in it)
  *   REC             a new seed (a new rave)                                  HOME  the sea / the info screen
  *   white keys 1-7  the layers on / off: DRUMS BASS ARP HOOK PAD STABS FX
@@ -36,6 +39,7 @@ static void siren_ui_init(void)
 {
     su.knob[0] = 500; su.knob[1] = 500; su.knob[2] = 500; su.knob[3] = 350;
     su.style = SB_TRANCE;
+    su.px_key = -1;
     siren_cmd(SC_SEED, su.style, 0, su_seed_new());
 }
 
@@ -55,7 +59,7 @@ static void siren_input(void)
             continue;
         switch (b) {
         case B_PLAY: if (sr.playing) { siren_cmd(SC_STOP, 0, 0, 0); transport_req = 2; } else { siren_cmd(SC_PLAY, 0, 0, 0); transport_req = 1; } break;
-        case B_FX: siren_cmd(SC_DIVE, 4, 0, 0); su_message("DIVE"); break;
+        case B_FX: su.fx_used = 0; break;                       /* (0.2) DIVE on its release, if no key was played */
         case B_ARP: siren_cmd(SC_DIVE, 16, 0, 0); su_message("DIVE 16"); break;
         case B_ENV: siren_cmd(SC_BREAK, 0, 0, 0); su_message("BREAK"); break;
         case B_LFO: su.lock_style ^= 1u; siren_cmd(SC_STYLELOCK, su.lock_style, 0, 0); su_message(su.lock_style ? "STYLE KEPT" : "STYLE FREE"); break;
@@ -63,6 +67,23 @@ static void siren_input(void)
         case B_HOME: su.info ^= 1u; break;
         default: break;
         }
+    }
+    {   /* (0.2) FX: held with a white key, the DJ's effects; tapped alone, DIVE */
+        uint32_t fx = su_held(B_FX);
+        if (su.fx_was && !fx && !su.fx_used) { siren_cmd(SC_DIVE, 4, 0, 0); su_message("DIVE"); }
+        su.fx_was = (uint8_t)fx;
+        if (su.px_key >= 0 && !((fm1_in.notes >> SU_WHITE[su.px_key]) & 1u)) {   /* its key let go: the set back */
+            su.px_key = -1;
+            siren_cmd(SC_PUNCH, -1, 0, 0);
+        }
+        for (k = 0; k < 16u && fx; k++)
+            if ((notes >> SU_WHITE[k]) & 1u) {
+                su.fx_used = 1; su.px_key = (int8_t)k;
+                siren_cmd(SC_PUNCH, (int32_t)k, 0, 0);
+                su_message(SIREN_PX[sb.style % SB_NSTYLES][k].name);
+            }
+        if (fx)
+            notes = 0;                                       /* (the keys are the effects while FX is held) */
     }
     for (k = 0; k < 16u; k++) {                              /* the white keys */
         if (!((notes >> SU_WHITE[k]) & 1u))
@@ -94,12 +115,15 @@ static void siren_leds(void)
     for (k = 0; k < 7u; k++)
         led_put(sr.mute[k] ? dl : nl, 14u + SU_WHITE[k], 1);
     led_put(nl, 14u + SU_WHITE[8u + sb.style % 8u], 1);
+    if (su.px_key >= 0) led_put(nl, 14u + SU_WHITE[su.px_key], 1);   /* (0.2) the effect held */
+    led_put(nl, panel.btn[B_FX], su.fx_was);
     for (c = 0; c < FM1_NCOL; c++) { fm1_led[c] = nl[c]; fm1_led_dim[c] = dl[c]; fm1_led_bg[c] = 0; }
 }
 
 static void siren_frame(void)
 {
     siren_input();
+    if (su.px_key >= 0 && su.msg_t < 2u) su.msg_t = 2;            /* (0.2) the effect's name while it is held */
     siren_service();
     siren_leds();
     siren_draw();

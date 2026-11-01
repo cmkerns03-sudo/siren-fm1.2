@@ -382,6 +382,7 @@ static int sb_note_of(const sb_brain_t *b, int chord, int deg, int oct, int base
     int n = deg + chord, o = sb_fdiv(n, 7), d = ((n % 7) + 7) % 7;
     return base + b->key + 12 * (o + oct) + SB_SCALES[b->scale][d];
 }
+static int sb_fold(int n, int top) { while (n > top) n -= 12; return n; }   /* (0.2) a melodic note an octave down while over top */
 static void sb_add(sb_events_t *ev, int L, int n, int v, int len)
 {
     sb_note_t *x;
@@ -485,13 +486,13 @@ void sb_step16(sb_brain_t *b, sb_events_t *ev)
             else if (b->arp.order == 2) { int q = i % (2 * span - 2); j = q < span ? q : 2 * span - 2 - q; }
             else if (b->arp.order == 3) { sb_rng_t ra = sb_rng(sb_hash(b->arp.seed, bar * 16u + (uint32_t)step)); j = (int)sb_ri(&ra, (uint32_t)span); }
             else if (b->arp.order == 4) j = (i * 2) % span;
-            sb_add(ev, L_ARP, SB_NOTE(TONES[j % 4], 1 + j / 4, 48), 80 + 30 * e / 1000, b->arp.gate ? b->arp.rate : 1);
+            sb_add(ev, L_ARP, sb_fold(SB_NOTE(TONES[j % 4], (b->arp.oct == 2 ? 0 : 1) + j / 4, 48), 72), 80 + 30 * e / 1000, b->arp.gate ? b->arp.rate : 1);
         }
     }
     /* ---- the hook */
     if (!bassDrop && b->layer_on[1] && (live || brk || (sec == SEC_GROOVE && barInSec >= 4 && e > 500))) {
         const sb_hstep_t *s = &b->hook[(barInPhrase * 16 + step) % b->hook_n];
-        if (s->on) sb_add(ev, L_HOOK, SB_NOTE(s->d, s->o, 48), s->v * (750 + 250 * e / 1000) / 1000, s->len);
+        if (s->on) sb_add(ev, L_HOOK, sb_fold(SB_NOTE(s->d, s->o, 48), 74), s->v * (750 + 250 * e / 1000) / 1000, s->len);
     }
     /* ---- the pad */
     if ((!bassDrop && b->layer_on[2] && sec != SEC_BUILD && (e < 800 || st->layers[2] > 900)) || brk || sec == SEC_INTRO || sec == SEC_OUTRO) {
@@ -523,5 +524,7 @@ void sb_step16(sb_brain_t *b, sb_events_t *ev)
 
 void sb_set_seed(sb_brain_t *b, uint32_t seed, int style) { b->track_no = 0; sb_new_track(b, seed, style < 0 ? b->style : style, 0, 0, 0); }
 void sb_reroll(sb_brain_t *b, int L) { b->rerolls[L]++; b->locks[L] = 0; sb_motifs(b); sb_pick_sounds(b); }
+/* (0.2) REWIND: the section from its first beat again (the DJ's reload); the bars go on counting */
+void sb_rewind(sb_brain_t *b) { b->sec_bar = 0; b->phrase_bar = 0; b->step = 0; }
 void sb_lock(sb_brain_t *b, int L, int on) { b->locks[L] = (uint8_t)(on ? 1 : 0); }
 void sb_knob(sb_brain_t *b, int k, int v) { b->knobs[k] = (int16_t)sb_clamp(v, 0, 1000); if (k == K_DENSITY) sb_motifs(b); }

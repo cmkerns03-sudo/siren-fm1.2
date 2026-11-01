@@ -13,6 +13,9 @@ D = Path(__file__).with_name('siren')
 STY = ['TECHNO', 'TRANCE', 'PSY', 'ACID', 'RAVE', 'HARD', 'DNB', 'DUBSTEP']
 LAY = ['DRUMS', 'BASS', 'ARP', 'HOOK', 'PAD', 'STAB', 'FX']
 cur = json.loads((D / 'curation.json').read_text()); kits = json.loads((D / 'kits.json').read_text())
+# (0.2) the engines a set can afford on the FM-1, six parts at once: no GRAIN, VPS, MACRO, VECTOR, STRINGS, TERRAIN, PHYS,
+# SAMPLE, FM6 (its patch waits for the main loop's fm6_poll, Clipper's screen) or WAVE (one table in RAM)
+LIGHT = {'ANALOG', 'ACID', 'TRIO', 'DIGITAL', 'PHASE', 'LOFI', 'NOISE', 'WHEEL', 'HYBRID', 'JUNO', 'WSEQ', 'FMX', 'VOICE', 'WOB'}
 def fm1(k, L):
     if '/' in k and not k.startswith('siren/'): return False
     eng = (k.split('/', 1)[1] if '/' in k else k).split(':', 1)[0]
@@ -30,6 +33,7 @@ for s in STY:
         for k in ks:
             body = k.split('/', 1)[1] if '/' in k else k
             e, p = body.split(':', 1)
+            if e not in LIGHT: sys.exit(f'gen_siren: {k} ({s} {L}): {e} is not one of the engines SIREN can afford')
             if (e, p) not in idx: idx[(e, p)] = len(snd); snd.append((e, p))
             lst.append(idx[(e, p)])
     spans.append(row)

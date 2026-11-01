@@ -1291,6 +1291,10 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
     int32_t bend = (uint32_t)(t - trk) < NPART ?
                    (part_ctl[pc].bend * (midi_bend ? (int32_t)midi_bend :
                                          e == &ENG_HYBRID ? (int32_t)hy_cur[t - trk].bend : 2)) >> 3 : 0;
+#if SIREN
+    if ((uint32_t)(t - trk) < NPART)
+        bend += siren_bend();                           /* (SIREN 0.2: BRAKE, REWIND, the whole set's pitch) */
+#endif
 #if CLIPPER_SYNTH
     /* Clipper 0.3: the mod wheel's and the aftertouch's destinations (P_MWDST, P_ATDST), velocity to the cutoff
      * (P_VELF); VIB and TREM ride a vibrato LFO of their own (~5.5 Hz sine), WAH the sound's LFO */

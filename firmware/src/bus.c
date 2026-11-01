@@ -83,7 +83,12 @@ static inline int32_t bus_lp(int32_t x8, int32_t *s, int32_t k)
     return y;
 }
 
-static int32_t bus_db(int32_t v, int32_t centre) { return SIREN ? 12 : clamp(v - centre, -12, 12) + 12; }   /* -> 0..24 (SIREN: flat, its slots are the drums' level and send) */
+/* -> 0..24 (SIREN: its isolator, siren.c; the slots are the drums' level and send) */
+#if SIREN
+#define bus_db(v, centre) siren_eq_db((centre) == EQ_LOW_C ? 0u : (centre) == EQ_MID_C ? 1u : 2u)
+#else
+static int32_t bus_db(int32_t v, int32_t centre) { return clamp(v - centre, -12, 12) + 12; }
+#endif
 
 static void bus_eq(int32_t *l, int32_t *r, uint32_t n)
 {
@@ -139,7 +144,7 @@ static void bus_eq(int32_t *l, int32_t *r, uint32_t n)
 static int32_t bus_gr_db10;                               /* the gain reduction now, 1/10 dB (the page's meter) */
 static void bus_comp(int32_t *l, int32_t *r, uint32_t n)
 {
-    int32_t amt = song.g[G_COMP], pk = 0, g0 = bus.gc, g1, x;
+    int32_t amt = SIREN ? 0 : song.g[G_COMP], pk = 0, g0 = bus.gc, g1, x;
     uint32_t i;
     if (!amt && bus.gc == 16384) {
         bus.env = 0;

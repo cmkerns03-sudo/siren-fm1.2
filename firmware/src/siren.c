@@ -51,8 +51,21 @@ static struct {
     int16_t ap_kick; uint16_t ap_kn16;
     uint8_t mute[8];
     int16_t sound_eng[SB_NLAYERS], sound_pre[SB_NLAYERS];   /* (the screen: what plays) */
+    /* (0.2) the CPU guard: 0 the set as written; 1 pads and stabs two notes; 2 the FX layer out, the pad its root, the
+     * arp in eighths. From the audio interrupt's own load (audio.c song.cpu_q8), with a hold (the hysteresis) */
+    uint8_t lean; uint16_t lean_hold; uint16_t cpu_test;
+    /* (0.2) the DJ's hands (siren_px_*): the effect held, its argument, sixteenths and units since it began */
+    volatile int8_t px; uint8_t px_arg, px_slot; uint32_t px_n16, px_u;
+    uint32_t n16;                                /* sixteenths fired since power-on (the rolls' grid) */
+    struct { uint8_t n; sb_note_t x[12]; } hist[8], loop[4];   /* the last eight sixteenths as written; a roll's loop */
+    uint32_t r_d0; uint8_t r_len, r_32, r_on, r_mask; uint16_t r_rep; int32_t r_half;
+    uint8_t m_layers, m_dlo, m_dhi, m_dall;       /* live notes held back: layers (bits), the kicks, the tops, drums */
+    int16_t sv_dtime, sv_dfdbk, sv_dust, sv_rsize, sv_rdamp; uint8_t sv_on;
+    int8_t eqk[3];                               /* the isolator: the master EQ's bands (bus.c, 12 flat .. 0 -12 dB) */
+    int32_t spd_q12, bend, gate_q12;             /* the clock's speed (BRAKE, HALF), the parts' pitch, the gate */
+    int32_t nz, nz1, nz2, nz_lvl;        /* the riser's noise */
 } sr;
-enum { SC_PLAY, SC_STOP, SC_KNOB, SC_DIVE, SC_BREAK, SC_STYLE, SC_SEED, SC_REROLL, SC_LOCK, SC_STYLELOCK };
+enum { SC_PLAY, SC_STOP, SC_KNOB, SC_DIVE, SC_BREAK, SC_STYLE, SC_SEED, SC_REROLL, SC_LOCK, SC_STYLELOCK, SC_PUNCH };
 
 /* the main loop's way into the brain */
 static void siren_cmd(uint32_t op, int32_t a, int32_t b, uint32_t c)
@@ -68,13 +81,166 @@ static void siren_all_off(void)
 {
     uint32_t i;
     for (i = 0; i < sr.noff; i++)
-        if (sr.off[i].trk != TRK_DRUM)
+        if (sr.off[i].trk < NPART)               /* (not the sub's 0xFF, not the drums) */
             trk_note_off1(&trk[sr.off[i].trk], sr.off[i].note);
     sr.noff = 0;
     for (i = 0; i < NPART; i++)
         trk_all_off1(&trk[i]);
     sr.sgate = 0; sr.won = 0;
 }
+/* ---- (0.2) the DJ's hands: hold FX, press a white key, and the set goes through that effect while the key is held;
+ * let it go and the set is back where it would have been (the brain never stops: a slip roll). SLOOP's punch-in
+ * effects loop the mix's audio (64 KB of RAM SIREN's six parts have taken); SIREN writes the music, so it loops
+ * and cuts the notes themselves (rolls, kills, cut, rewind) and moves the master (filter, echo, wash, gate, crush,
+ * isolator, brake). Keys 1-12 the same in every style; 13-16 the style's own. */
+enum { SPX_NONE, SPX_ROLL, SPX_PROLL, SPX_DROLL, SPX_LOW, SPX_HIGH, SPX_ECHO, SPX_DUB, SPX_WASH, SPX_KLOW, SPX_KMID, SPX_KHIGH,
+       SPX_GATE, SPX_CRUSH, SPX_STRIP, SPX_CUT, SPX_BRAKE, SPX_HALF, SPX_REWIND, SPX_RISER, SPX_SQUELCH };
+typedef struct { uint8_t fx, arg; const char *name; } siren_px_t;
+#define SPX_COMMON {SPX_ROLL, 4, "ROLL 1/4"}, {SPX_ROLL, 2, "ROLL 1/8"}, {SPX_ROLL, 1, "ROLL 1/16"}, {SPX_ROLL, 0, "ROLL 1/32"}, \
+    {SPX_LOW, 0, "LOW PASS"}, {SPX_HIGH, 0, "HIGH PASS"}, {SPX_ECHO, 0, "ECHO OUT"}, {SPX_WASH, 0, "WASH OUT"},          \
+    {SPX_KLOW, 0, "KILL LOW"}, {SPX_KMID, 0, "KILL MID"}, {SPX_KHIGH, 0, "KILL HIGH"}, {SPX_GATE, 0, "GATE"}
+static const siren_px_t SIREN_PX[SB_NSTYLES][16] = {
+    {SPX_COMMON, {SPX_DUB, 6, "DUB ECHO"}, {SPX_CRUSH, 0, "CRUSH"}, {SPX_STRIP, 0, "KICK+BASS"}, {SPX_CUT, 0, "CUT"}},           /* TECHNO */
+    {SPX_COMMON, {SPX_RISER, 0, "RISER"}, {SPX_PROLL, 1, "PITCH ROLL"}, {SPX_DUB, 6, "DUB ECHO"}, {SPX_CUT, 0, "CUT"}},          /* TRANCE */
+    {SPX_COMMON, {SPX_DUB, 6, "DUB ECHO"}, {SPX_SQUELCH, 0, "SQUELCH"}, {SPX_PROLL, 1, "PITCH ROLL"}, {SPX_CRUSH, 0, "CRUSH"}}, /* PSY */
+    {SPX_COMMON, {SPX_SQUELCH, 0, "SQUELCH"}, {SPX_DUB, 6, "DUB ECHO"}, {SPX_CRUSH, 0, "CRUSH"}, {SPX_CUT, 0, "CUT"}},          /* ACID */
+    {SPX_COMMON, {SPX_PROLL, 1, "PITCH ROLL"}, {SPX_BRAKE, 0, "BRAKE"}, {SPX_CRUSH, 0, "CRUSH"}, {SPX_RISER, 0, "RISER"}},     /* RAVE */
+    {SPX_COMMON, {SPX_CRUSH, 0, "CRUSH"}, {SPX_STRIP, 0, "KICK+BASS"}, {SPX_PROLL, 1, "PITCH ROLL"}, {SPX_CUT, 0, "CUT"}},      /* HARD */
+    {SPX_COMMON, {SPX_REWIND, 0, "REWIND"}, {SPX_HALF, 0, "HALF TIME"}, {SPX_DROLL, 1, "DRUM ROLL"}, {SPX_CRUSH, 0, "CRUSH"}}, /* DNB */
+    {SPX_COMMON, {SPX_BRAKE, 0, "BRAKE"}, {SPX_HALF, 0, "HALF TIME"}, {SPX_REWIND, 0, "REWIND"}, {SPX_CRUSH, 0, "CRUSH"}},     /* DUBSTEP */
+};
+#define SPX_ALL 0xFFu
+#define SPX_MELO ((1u << L_ARP) | (1u << L_HOOK) | (1u << L_PAD) | (1u << L_STAB) | (1u << L_FX))
+static int siren_drum_lo(uint32_t n) { return n == 35u || n == 36u; }
+static int siren_drum_hi(uint32_t n) { return n == 42u || n == 46u || n == 49u || n == 51u || n == 70u || n == 56u || n == 75u; }
+static void siren_parts_off(uint32_t layers)    /* the parts of these layers silent now (and the sub) */
+{
+    uint32_t L;
+    for (L = L_BASS; L <= L_FX; L++)
+        if ((layers >> L) & 1u)
+            trk_all_off1(SIREN_PART(L));
+    if ((layers >> L_SUB) & 1u)
+        sr.sgate = 0;
+}
+static void siren_px_end(void)
+{
+    uint32_t i;
+    int fx = sr.px;
+    if (fx == SPX_NONE)
+        return;
+    sr.px = SPX_NONE;
+    if (sr.sv_on) {
+        song.g[G_DTIME] = sr.sv_dtime; song.g[G_DFDBK] = sr.sv_dfdbk; song.g[G_DUST] = sr.sv_dust;
+        song.g[G_RSIZE] = sr.sv_rsize; song.g[G_RDAMP] = sr.sv_rdamp; sr.sv_on = 0;
+    }
+    for (i = 0; i < 6u; i++)
+        trk[i].p[P_DLY] = SIREN_MIX[i][2];
+    song.g[G_DRDLY] = (int16_t)SIREN_DMIX[sb.style][2];
+    song.g[G_DRREV] = (int16_t)SIREN_DMIX[sb.style][1];
+    sr.eqk[0] = sr.eqk[1] = sr.eqk[2] = 12;
+    sr.m_layers = sr.m_dlo = sr.m_dhi = sr.m_dall = 0;
+    sr.r_on = 0; sr.r_half = 0;
+    sr.spd_q12 = 4096; sr.bend = 0; sr.gate_q12 = 4096; sr.nz_lvl = 0;
+    song.g[G_FILT] = (int16_t)(sr.ev.hp * 63 / 1000);
+    song.g[G_BPM] = sb.bpm;
+    if (fx == SPX_REWIND) {                       /* the reload: the section again from its first beat, now */
+        siren_all_off();
+        sb_rewind(&sb);
+        sr.until = 0;
+    }
+}
+static void siren_px_start(uint32_t slot)
+{
+    const siren_px_t *k = &SIREN_PX[sb.style % SB_NSTYLES][slot % 16u];
+    uint32_t i;
+    siren_px_end();
+    sr.px_slot = (uint8_t)(slot % 16u); sr.px_arg = k->arg; sr.px_n16 = 0; sr.px_u = 0;
+    sr.sv_dtime = song.g[G_DTIME]; sr.sv_dfdbk = song.g[G_DFDBK]; sr.sv_dust = song.g[G_DUST];
+    sr.sv_rsize = song.g[G_RSIZE]; sr.sv_rdamp = song.g[G_RDAMP]; sr.sv_on = 1;
+    switch (k->fx) {
+    case SPX_ROLL: case SPX_PROLL: case SPX_DROLL: {
+        uint32_t L = k->arg ? k->arg : 1u, cur = sr.n16 ? sr.n16 - 1u : 0u;   /* (from the beat playing: its first */
+        sr.r_len = (uint8_t)L; sr.r_32 = (uint8_t)(k->arg == 0); sr.r_d0 = cur - cur % 4u; sr.r_on = 0; sr.r_rep = 0;   /* sixteenth holds the kick) */
+        sr.r_mask = (uint8_t)(k->fx == SPX_DROLL ? 1u << L_DRUMS : SPX_ALL);
+        if (sr.r_d0 >= 4u && sr.r_d0 + L <= sr.n16) {   /* (nothing in it, as written: the beat before, if it had) */
+            uint32_t j, here = 0, before = 0;
+            for (j = 0; j < L; j++) { here += sr.hist[(sr.r_d0 + j) % 8u].n; before += sr.hist[(sr.r_d0 - 4u + j) % 8u].n; }
+            if (!here && before) sr.r_d0 -= 4u;
+        }
+        break;
+    }
+    case SPX_ECHO:                                /* everything into a long echo, then the live notes stop: the echo out */
+        song.g[G_DTIME] = 0; song.g[G_DFDBK] = 100;
+        for (i = 0; i < 6u; i++) trk[i].p[P_DLY] = 120;
+        song.g[G_DRDLY] = 110;
+        break;
+    case SPX_DUB:                                 /* a dub throw: the leads and the snare into a dotted echo, the set goes on */
+        song.g[G_DTIME] = k->arg; song.g[G_DFDBK] = 88;
+        trk[L_ARP - 1].p[P_DLY] = 110; trk[L_HOOK - 1].p[P_DLY] = 120; trk[L_STAB - 1].p[P_DLY] = 120;
+        song.g[G_DRDLY] = 70;
+        break;
+    case SPX_WASH:                                /* into a long reverb, then the live notes stop: the wash out */
+        song.g[G_DRREV] = 110; song.g[G_RSIZE] = 124; song.g[G_RDAMP] = 30;
+        break;
+    case SPX_KLOW: sr.eqk[0] = 0; sr.m_layers = (1u << L_BASS) | (1u << L_SUB); sr.m_dlo = 1; siren_parts_off(sr.m_layers); break;
+    case SPX_KMID: sr.eqk[1] = 2; sr.m_layers = SPX_MELO; siren_parts_off(SPX_MELO); break;
+    case SPX_KHIGH: sr.eqk[2] = 0; sr.m_dhi = 1; break;
+    case SPX_CRUSH: song.g[G_DUST] = 112; break;
+    case SPX_STRIP: sr.m_layers = SPX_MELO; sr.m_dhi = 1; siren_parts_off(SPX_MELO); break;
+    case SPX_CUT: sr.m_layers = SPX_ALL & ~(1u << L_DRUMS); sr.m_dall = 1; siren_all_off(); break;
+    case SPX_HALF: sr.spd_q12 = 2048; break;
+    case SPX_RISER: case SPX_REWIND: sr.nz_lvl = 0; break;
+    default: break;
+    }
+    sr.px = (int8_t)k->fx;
+}
+/* (audio interrupt, every block) the effects that move: filters, gate, brake, rewind, squelch, riser */
+static void siren_px_block(uint32_t adv)
+{
+    int32_t u16 = (int32_t)(BEAT_U / 4u), p;
+    uint32_t i;
+    if (sr.px == SPX_NONE)
+        return;
+    sr.px_u += adv;
+    p = (int32_t)(sr.px_u / (uint32_t)(u16 / 8));                  /* eighths of a sixteenth since it began */
+    switch (sr.px) {
+    case SPX_LOW: song.g[G_FILT] = (int16_t)-(10 + sb_clamp(p * 50 / 256, 0, 50)); break;    /* over two bars */
+    case SPX_HIGH: song.g[G_FILT] = (int16_t)(10 + sb_clamp(p * 46 / 256, 0, 46)); break;
+    case SPX_PROLL: song.g[G_FILT] = (int16_t)sb_clamp(sr.r_rep * 3, 0, 42); break;
+    case SPX_RISER:                               /* four bars of noise, rising */
+        sr.nz_lvl = sb_clamp(p * 32767 / 512, 0, 32767);
+        song.g[G_FILT] = (int16_t)sb_clamp(p * 30 / 512, 0, 30);
+        break;
+    case SPX_ECHO: case SPX_WASH:
+        if (sr.px_n16 >= 4u) { sr.m_layers = SPX_ALL & ~(1u << L_DRUMS); sr.m_dall = 1; }
+        if (sr.px == SPX_WASH) { for (i = 0; i < 6u; i++) trk[i].p[P_REV] = 127; song.g[G_FILT] = 16; }
+        break;
+    case SPX_GATE: {                              /* sixteenths: open for the first half of each */
+        int32_t into = u16 - (sr.until > 0 ? sr.until : 0);
+        sr.gate_q12 = into < u16 / 2 ? 4096 : 330;
+        break;
+    }
+    case SPX_BRAKE: case SPX_REWIND: {             /* the clock to a stop over a beat (REWIND: half), the pitch down with it */
+        int32_t len = sr.px == SPX_BRAKE ? 32 * 8 / 2 : 32 * 8 / 4;        /* in eighths of a sixteenth: a beat, half */
+        int32_t left = sb_clamp(len - p, 0, len);
+        sr.spd_q12 = left * 4096 / len;
+        sr.bend = sr.px == SPX_BRAKE ? -(4096 - sr.spd_q12) * 24 : (p < len / 3 ? p * 4096 * 12 / (len / 3) : -(4096 - sr.spd_q12) * 30);
+        if (sr.px == SPX_REWIND) sr.nz_lvl = left ? 26000 : 0;
+        if (!left && !sr.m_dall) { sr.m_layers = SPX_ALL & ~(1u << L_DRUMS); sr.m_dall = 1; siren_all_off(); }
+        break;
+    }
+    case SPX_SQUELCH: {                           /* the bass, the arp, the hook's filters swept by a half-bar wave */
+        int32_t w = (int32_t)((sr.px_u % (uint32_t)(u16 * 8)) * 64 / (uint32_t)(u16 * 8)), tri = w < 32 ? w : 63 - w;
+        trk[L_BASS - 1].p[P_TFLT] = trk[L_ARP - 1].p[P_TFLT] = trk[L_HOOK - 1].p[P_TFLT] = (int16_t)-(6 + (31 - tri));
+        break;
+    }
+    case SPX_HALF: song.g[G_BPM] = (int16_t)(sb.bpm / 2u); break;
+    default: break;
+    }
+}
+static int32_t siren_bend(void) { return sr.bend; }                /* (voice.c: 1/4096 semitone on every part) */
+static int32_t siren_eq_db(uint32_t band) { return sr.eqk[band % 3u]; }   /* (bus.c) */
+
 static void siren_commands(void)                 /* (audio interrupt) */
 {
     while (sr.cr != sr.cw) {
@@ -82,15 +248,16 @@ static void siren_commands(void)                 /* (audio interrupt) */
         int32_t a = sr.cmd[i].a, b = sr.cmd[i].b;
         switch (sr.cmd[i].op) {
         case SC_PLAY: if (!sr.playing) { sr.playing = 1; sr.until = 0; } break;
-        case SC_STOP: sr.playing = 0; siren_all_off(); break;
+        case SC_STOP: siren_px_end(); sr.playing = 0; siren_all_off(); break;
         case SC_KNOB: sb_knob(&sb, a, b); break;
         case SC_DIVE: sb.dive = (uint8_t)a; break;
         case SC_BREAK: sb.break_req = 1; break;
-        case SC_STYLE: siren_all_off(); sb_set_seed(&sb, sb.seed, a); break;
-        case SC_SEED: siren_all_off(); sb_set_seed(&sb, sr.cmd[i].c, a); break;
+        case SC_STYLE: siren_px_end(); siren_all_off(); sb_set_seed(&sb, sb.seed, a); break;
+        case SC_SEED: siren_px_end(); siren_all_off(); sb_set_seed(&sb, sr.cmd[i].c, a); break;
         case SC_REROLL: sb_reroll(&sb, a); break;
         case SC_LOCK: sb_lock(&sb, a, b); break;
         case SC_STYLELOCK: sb.style_lock = (uint8_t)a; break;
+        case SC_PUNCH: if (a < 0) siren_px_end(); else siren_px_start((uint32_t)a); break;
         }
         sr.cr++;
     }
@@ -113,38 +280,91 @@ static void siren_wobble(uint32_t adv)
     sr.wph = ph + adv * sr.winc;
 }
 
+/* one note into its part (tr: semitones up, the pitch roll), its end len units on */
+static void siren_play(const sb_note_t *x, int tr, uint32_t len)
+{
+    uint32_t n = (uint32_t)sb_clamp((int)x->note + (x->layer == L_DRUMS ? 0 : tr), 0, 127), tk = 0xFFu, k;
+    if (sr.mute[x->layer])
+        return;
+    if (x->layer == L_DRUMS) {
+        trk_note_on1(TDRUM, x->note, x->vel);
+        if (x->note == 36u) sr.kicks++;
+        return;
+    }
+    if (x->layer == L_SUB) {
+        sr.snote = (uint8_t)n; sr.sinc = SD_NOTE_INC[n]; sr.sgate = x->vel * 258;
+    } else {
+        tk = (uint32_t)x->layer - 1u;
+        for (k = 0; k < sr.noff; k++)                       /* (the same note again: the last one ends first) */
+            if (sr.off[k].trk == tk && sr.off[k].note == n) { trk_note_off1(&trk[tk], n); sr.off[k] = sr.off[--sr.noff]; break; }
+        trk_note_on1(&trk[tk], n, x->vel);
+    }
+    if (sr.noff < 64u) {
+        sr.off[sr.noff].trk = (uint8_t)tk; sr.off[sr.noff].note = (uint8_t)n; sr.off[sr.noff].left = (int32_t)len; sr.noff++;
+    }
+    { uint32_t q = sr.notes_n % 16u; sr.notes_l[q] = x->layer; sr.notes_k[q] = (uint8_t)n; sr.notes_n++; }   /* (the screen's sparks) */
+}
+static int siren_held_back(const sb_note_t *x)   /* (0.2) a live note an effect keeps out (a kill, the cut, the outs) */
+{
+    if ((sr.m_layers >> x->layer) & 1u)
+        return 1;
+    return x->layer == L_DRUMS && (sr.m_dall || (sr.m_dlo && siren_drum_lo(x->note)) || (sr.m_dhi && siren_drum_hi(x->note)));
+}
+/* (0.2) a roll's sixteenth: the loop's notes again (the layers it holds), as long as the loop at most */
+static void siren_replay(uint32_t k, uint32_t len16, uint32_t u16)
+{
+    uint32_t i;
+    int tr = sr.px == SPX_PROLL ? sb_clamp((int)sr.r_rep, 0, 12) : 0;
+    for (i = 0; i < sr.loop[k].n; i++) {
+        const sb_note_t *x = &sr.loop[k].x[i];
+        uint32_t l = x->len < len16 ? x->len : len16;
+        if ((sr.r_mask >> x->layer) & 1u)
+            siren_play(x, tr, sr.r_32 ? u16 / 200u * 92u : l * (u16 / 100u) * 92u);
+    }
+    sr.r_rep++;
+}
+
 /* one sixteenth: the brain's events into the parts and the drums */
 static void siren_fire(void)
 {
     sb_events_t *ev = &sr.ev;
-    uint32_t i, u16 = BEAT_U / 4u;
+    uint32_t i, u16 = BEAT_U / 4u, s = sr.n16++, npad = 0, nstab = 0, roll;
     sb_step16(&sb, ev);
     song.g[G_BPM] = ev->bpm;
+    {   /* (0.2) the CPU guard, from the audio interrupt's own load (Q8, 256 = all of it) */
+        uint32_t c = (uint32_t)song.cpu_q8 + sr.cpu_test;
+        if (c > 205u) { sr.lean = 2; sr.lean_hold = 128; }
+        else if (c > 179u && sr.lean < 1u) { sr.lean = 1; sr.lean_hold = 128; }
+        else if (c < 140u && sr.lean && !--sr.lean_hold) { sr.lean--; sr.lean_hold = 128; }
+    }
+    roll = sr.px == SPX_ROLL || sr.px == SPX_PROLL || sr.px == SPX_DROLL;
+    if (!sr.r_on) {                                  /* (0.2) the notes as written, for a roll */
+        uint32_t h = s % 8u;
+        sr.hist[h].n = 0;
+        for (i = 0; i < ev->nnotes && sr.hist[h].n < 12u; i++)
+            sr.hist[h].x[sr.hist[h].n++] = ev->notes[i];
+    }
+    if (roll && !sr.r_on && s >= sr.r_d0 + sr.r_len) {   /* the loop closes: from here, its notes again */
+        uint32_t k;
+        uint32_t any = 0;
+        for (k = 0; k < sr.r_len; k++) { sr.loop[k] = sr.hist[(sr.r_d0 + k) % 8u]; any += sr.loop[k].n; }
+        if (!any) sr.r_mask = 0;                     /* (an empty loop, a break's: the set plays through it) */
+        sr.r_on = 1;
+    }
     for (i = 0; i < ev->nnotes; i++) {
         const sb_note_t *x = &ev->notes[i];
-        if (sr.mute[x->layer])
+        if ((sr.r_on && ((sr.r_mask >> x->layer) & 1u)) || siren_held_back(x))
             continue;
-        if (x->layer == L_SUB) {
-            sr.snote = x->note; sr.sinc = SD_NOTE_INC[x->note & 127u]; sr.sgate = x->vel * 258;
-        } else {
-            uint32_t tk = x->layer == L_DRUMS ? TRK_DRUM : (uint32_t)x->layer - 1u, k;
-            if (x->layer == L_DRUMS) {
-                trk_note_on1(TDRUM, x->note, x->vel);
-                if (x->note == 36u) sr.kicks++;
-                continue;
-            }
-            for (k = 0; k < sr.noff; k++)                       /* (the same note again: the last one ends first) */
-                if (sr.off[k].trk == tk && sr.off[k].note == x->note) { trk_note_off1(&trk[tk], x->note); sr.off[k] = sr.off[--sr.noff]; break; }
-            trk_note_on1(&trk[tk], x->note, x->vel);
-        }
-        if (sr.noff < 64u) {
-            sr.off[sr.noff].trk = (uint8_t)(x->layer == L_SUB ? 0xFFu : (uint32_t)x->layer - 1u);
-            sr.off[sr.noff].note = x->note;
-            sr.off[sr.noff].left = (int32_t)(x->len * (u16 / 100u) * 92u);
-            sr.noff++;
-        }
-        { uint32_t q = sr.notes_n % 16u; sr.notes_l[q] = x->layer; sr.notes_k[q] = x->note; sr.notes_n++; }   /* (the screen's sparks) */
+        if (sr.lean && ((x->layer == L_PAD && ++npad > (sr.lean > 1u ? 1u : 2u)) || (x->layer == L_STAB && ++nstab > 2u) ||
+                        (sr.lean > 1u && (x->layer == L_FX || (x->layer == L_ARP && (ev->step & 1u))))))
+            continue;
+        siren_play(x, 0, (uint32_t)(x->len * (u16 / 100u) * 92u));
     }
+    if (sr.r_on) {
+        siren_replay((s - sr.r_d0) % sr.r_len, sr.r_len, u16);
+        if (sr.r_32) sr.r_half = (int32_t)(u16 / 2u);
+    }
+    if (sr.px != SPX_NONE) sr.px_n16++;
     if (ev->has_wob && !sr.mute[L_BASS]) {
         sr.won = 1; sr.wph = 0; sr.wshape = ev->wob.shape; sr.wdepth = ev->wob.depth;
         sr.winc = 19478u * 1000u / (uint32_t)(ev->wob.rate3 ? ev->wob.rate3 : 12) / 1000u;   /* 3 x 2^32 / (rate3 x a sixteenth's units) */
@@ -169,9 +389,10 @@ static void siren_fire(void)
 /* (audio interrupt, events_block) the brain's clock: n samples, adv units */
 static void siren_block(uint32_t n, uint32_t adv)
 {
-    uint32_t i;
+    uint32_t i, real = adv;
     (void)n;
     siren_commands();
+    adv = (uint32_t)(((uint64_t)adv * (uint32_t)sr.spd_q12) >> 12);   /* (0.2) BRAKE, HALF: the clock slower */
     for (i = 0; i < sr.noff;) {                                     /* the note-offs due */
         sr.off[i].left -= (int32_t)adv;
         if (sr.off[i].left <= 0) {
@@ -188,7 +409,12 @@ static void siren_block(uint32_t n, uint32_t adv)
             siren_fire();
             sr.until += u16 + u16 / 1000 * sw;
         }
+        if (sr.r_half > 0 && (sr.r_half -= (int32_t)adv) <= 0) {   /* (0.2) ROLL 1/32: the loop again, half a sixteenth on */
+            sr.r_half = 0;
+            if (sr.r_on) siren_replay(0, 1, BEAT_U / 4u);
+        }
     }
+    siren_px_block(real);                                          /* (its own time: the brake runs out) */
     siren_wobble(adv);
 }
 
@@ -196,6 +422,16 @@ static void siren_block(uint32_t n, uint32_t adv)
 static void siren_mix(int32_t *l, int32_t *r, uint32_t n)
 {
     uint32_t i;
+    if (sr.nz_lvl) {                                 /* (0.2) RISER, REWIND: noise, its colour rising with its level */
+        int32_t k = 2000 + (sr.nz_lvl >> 2);
+        for (i = 0; i < n; i++) {
+            int32_t w = (int32_t)(noise32(&sr.nz) >> 17) - 16384, y;
+            sr.nz1 += mulq15(w - sr.nz1, k);         /* low-pass, opening */
+            sr.nz2 += mulq15(sr.nz1 - sr.nz2, 1200); /* its own low end, taken off */
+            y = mulq15(sr.nz1 - sr.nz2, sr.nz_lvl) >> 1;
+            l[i] += y; r[i] += y;
+        }
+    }
     if (!sr.sgate && sr.senv < 8)
         return;
     for (i = 0; i < n; i++) {
@@ -208,7 +444,7 @@ static void siren_mix(int32_t *l, int32_t *r, uint32_t n)
     }
 }
 static int32_t siren_duck_depth(void) { return sr.duck; }
-static int32_t siren_gain_q12(void) { return sr.gain_q12; }
+static int32_t siren_gain_q12(void) { return (sr.gain_q12 * sr.gate_q12) >> 12; }   /* (0.2: the GATE) */
 static void siren_scope_tap(void)                /* (mix_block: the visualiser's taps, for the screen) */
 {
     uint32_t i;
@@ -250,6 +486,7 @@ static void siren_apply_kit(void)
     TDRUM->p[P_E0] = (int16_t)DRUM_SYN;
     song.g[G_DRLVL] = (int16_t)SIREN_DMIX[sb.style][0];
     song.g[G_DRREV] = (int16_t)SIREN_DMIX[sb.style][1];
+    song.g[G_DRDLY] = (int16_t)SIREN_DMIX[sb.style][2];   /* (0.2: the drums' echo send; SIREN's master has no COMP) */
 }
 static void siren_service(void)
 {
@@ -272,6 +509,7 @@ static void siren_service(void)
             t->p[P_DLY] = SIREN_MIX[L - 1][2]; t->p[P_REV] = SIREN_MIX[L - 1][3]; t->p[P_CHOR] = 0;
             t->p[P_AMODE] = 0;                   /* (the brain is the arpeggiator: a preset's arp off) */
             sr.sound_eng[L] = e; sr.sound_pre[L] = pe;
+            break;                               /* (0.2) one sound a call: a new track's six fades not all at once */
         }
     }
     if (sb.snd[L_DRUMS] != sr.ap_kick || sb.kick_n16 != sr.ap_kn16 || style != sr.applied_style[0]) {
@@ -293,6 +531,7 @@ static void siren_init(void)
     sb_init(&sb, &sb_pal);
     for (i = 0; i < 7u; i++) sr.applied[i] = -1, sr.applied_style[i] = -1;
     sr.ap_kick = -1; sr.gain_q12 = 4096;
+    sr.spd_q12 = 4096; sr.gate_q12 = 4096; sr.eqk[0] = sr.eqk[1] = sr.eqk[2] = 12; sr.nz = 0x5EED; sr.px = SPX_NONE;
     for (i = 0; i < NTRK; i++) {
         trk[i].p[P_MUTE] = 0;
         trk[i].p[P_AMODE] = 0;

@@ -64,6 +64,7 @@
   const SEC_E = { INTRO: 250, GROOVE: 550, BUILD: 750, DROP: 1000, BREAK: 300, PEAK: 920, OUTRO: 320 };
   // the drum kit's lanes (GM notes: kick, kick2, snare, clap, hat, open, pedal, rim, snr 2, tom l, tom h, crash, ride, shake, conga, bell, clave)
   const D = { kick: 36, kick2: 35, snare: 38, clap: 39, hat: 42, open: 46, pedal: 44, rim: 37, snare2: 40, toml: 43, tomh: 48, crash: 49, ride: 51, shake: 70, conga: 63, bell: 56, clave: 75 };
+  const fold = (n, top) => { while (n > top) n -= 12; return n; };   // (0.2) a melodic note an octave down while over top
   const LAYERS = ['DRUMS', 'BASS', 'ARP', 'HOOK', 'PAD', 'STAB', 'FX'];
   const LAYERS_ALL = ['DRUMS', 'BASS', 'SUB', 'ARP', 'HOOK', 'PAD', 'STAB', 'FX'];
   const SOUND_LAYERS = ['BASS', 'ARP', 'HOOK', 'PAD', 'STAB', 'FX'];
@@ -381,13 +382,13 @@
         else if (A.order === 2) { const q = i % (2 * span - 2); j = q < span ? q : 2 * span - 2 - q; }
         else if (A.order === 3) j = rng(hash(A.seed, bar * 16 + step)).i(span);
         else if (A.order === 4) j = (i * 2) % span;
-        add('ARP', note(tones[j % 4], 1 + div(j, 4), 48), 80 + div(30 * e, 1000), A.gate ? A.rate : 1);
+        add('ARP', fold(note(tones[j % 4], (A.oct === 2 ? 0 : 1) + div(j, 4), 48), 72), 80 + div(30 * e, 1000), A.gate ? A.rate : 1);   // (0.2: no higher than C5)
       }
     }
     // ---- the hook: in the drops, the peak, the break (alone, the theme), late grooves
     if (!bassDrop && this.layerOn.hook && (live || brk || (sec === 'GROOVE' && barInSec >= 4 && e > 500))) {
       const H = p.HOOK, s = H[(barInPhrase * 16 + step) % H.length];
-      if (s) add('HOOK', note(s.d, s.o, 48), div(s.v * (750 + div(250 * e, 1000)), 1000), s.len);
+      if (s) add('HOOK', fold(note(s.d, s.o, 48), 74), div(s.v * (750 + div(250 * e, 1000)), 1000), s.len);
     }
     // ---- the pad: the chord, held (a break, an intro, an outro always have it)
     if ((!bassDrop && this.layerOn.pad && sec !== 'BUILD' && (e < 800 || st.layers[2] > 900)) || brk || sec === 'INTRO' || sec === 'OUTRO') {

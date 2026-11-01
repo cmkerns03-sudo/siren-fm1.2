@@ -560,5 +560,7 @@ static void siren_block(uint32_t n, uint32_t adv);
 static void siren_mix(int32_t *l, int32_t *r, uint32_t n);
 static int32_t siren_duck_depth(void);
 static int32_t siren_gain_q12(void);
+static int32_t siren_bend(void);
+static int32_t siren_eq_db(uint32_t band);
 static void siren_scope_tap(void);
 #endif
