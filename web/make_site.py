@@ -27,6 +27,7 @@ import hashlib
 import json
 import re
 import shutil
+import os
 import sys
 from pathlib import Path
 
@@ -122,6 +123,8 @@ def main(pkg, version, out):
             raise SystemExit(f"index_pkg.html must contain {mark} once; update make_site.py")
     html = html.replace("/*LIB*/", lib).replace("/*META*/", meta)
     logo = HERE.parent / "assets" / "logo" / "clipper-logo.svg"   # the Clipper logo, inline
+    if os.environ.get("SIREN") == "1":            # SIREN: its logo on the installer
+        logo = HERE.parent / "assets" / "logo" / "siren-logo.svg"
     html = html.replace("<!--LOGO-->", logo.read_text(encoding="utf-8") if logo.exists() else "<b>Clipper</b>")
     inst, ed, fw = out / "webapp" / "installer", out / "webapp" / "editor", out / "firmware"
     for d in (inst, ed, fw):
