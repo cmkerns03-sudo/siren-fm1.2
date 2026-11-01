@@ -15,6 +15,12 @@ int main(int argc, char **argv)
         if (i % 3001 == 2000) sb_knob(&b, (i / 3001) % 4, (int)((i * 37u) % 1001));
         if (i % 9001 == 4500) sb_reroll(&b, 1 + (i / 9001) % 6);
         if (i % 6007 == 3000) sb_lock(&b, (i / 6007) % 7, (i / 6007) % 2);
+        if (i % 4001 == 1500) b.drop_req = 1;                                     /* (0.5) the black keys */
+        if (i % 8009 == 2500) b.stay = (uint8_t)!b.stay;
+        if (i % 6997 == 3500) b.key_req = 1;
+        if (i % 2003 == 1000) sb_remotif(&b, (i / 2003) % 7, (i / 2003) % 3 == 0 ? -1 : 1);
+        if (i % 11003 == 9000) sb_next_track(&b);
+        if (i >= 12000 && i < 16000 && i % 53 == 7) { if (i % 2) b.break_req = 1; else b.drop_req = 1; }   /* (0.5) the plan full */
         sb_step16(&b, &ev);
         printf("%d %s %u e%d b%d k%d c%d", i, SB_SEC_NAMES[ev.sec], b.style, ev.e, ev.bpm, ev.key, ev.chord);
         for (k = 0; k < ev.nnotes; k++) printf(" %s:%d:%d:%d", LN[ev.notes[k].layer], ev.notes[k].note, ev.notes[k].vel, ev.notes[k].len);

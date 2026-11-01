@@ -155,6 +155,11 @@ run "SIREN: every style through the firmware's audio path (sanitizers)" sh -c 'f
 $SIR -DNVOICE=8 -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -o "$OUT/siren_dj" tests/siren/dj_test.c -lm -lpthread
 mkdir -p build/siren_dj
 run "SIREN 0.2: the DJ's effects, every style and key (back where it was after; kills, cut, rolls), the CPU guard (sanitizers)" "$OUT/siren_dj" build/siren_dj
+$SIR -DNVOICE=8 -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -o "$OUT/siren_hands" tests/siren/hands_test.c -lm -lpthread
+mkdir -p build/siren_hands
+run "SIREN 0.5: the hands (black keys, mixer, sounds) and the arrangement (three melodic layers at most; sanitizers)" "$OUT/siren_hands" build/siren_hands
+$SIR -I. -DNVOICE=8 -o "$OUT/siren_levels" tests/siren/level_cal.c -lm -lpthread
+run "SIREN 0.5: every sound at its layer's loudness (within 2 dB), its hard highs softened (tools/siren/levels.json)" sh -c '"$0" check > "$1/levels.txt"' "$OUT/siren_levels" "$OUT"
 $SIR -DNVOICE=8 -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -o "$OUT/siren_screen" tests/siren/screen_test.c -lm -lpthread
 mkdir -p build/siren_screen
 run "SIREN 0.3: the deck screen drawn through a set (only what changes sent; sanitizers)" "$OUT/siren_screen" 7 S1R-3N07 build/siren_screen

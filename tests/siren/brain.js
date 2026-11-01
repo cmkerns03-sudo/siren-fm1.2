@@ -84,6 +84,7 @@
     this.trackNo = 0; this.bar = 0; this.step = 0; this.phraseBar = 0;
     this.palette = null;                              // { CUR: { style: { layer: [sound] } }, DKITS: { style: [kit] } }
     this.dive = 0; this.breakReq = false;
+    this.dropReq = false; this.stay = false; this.keyReq = false; this.motifOnly = null; this.motifVer = {};   // (0.5) the hands
     this.newTrack(this.seed, this.style, null);
   }
   Brain.prototype.setPalette = function (p) { this.palette = p; this.pickSounds(); };
@@ -144,8 +145,8 @@
   // the motifs: each layer's pattern, from its own stream (a locked layer keeps its own)
   Brain.prototype.motifs = function () {
     const k = this.knobs, st = this.g;
-    const R = (L) => rng(hash(this.seed, 1000 + LAYERS.indexOf(L) * 17 + (this.rerolls[L] || 0) * 977));
-    const keep = (L) => this.locks[L] && this.pat && this.pat[L];
+    const R = (L) => rng(hash(this.seed, 1000 + LAYERS.indexOf(L) * 17 + (this.rerolls[L] || 0) * 977 + (this.motifVer[L] || 0) * 313));
+    const keep = (L) => (this.locks[L] || (this.motifOnly && this.motifOnly !== L)) && this.pat && this.pat[L];
     const pat = this.pat || {};
     const G = st.groove;
     // drums: hats, percussion as euclidean rhythms, rotated; the breaks' kicks and ghosts
@@ -265,18 +266,38 @@
   Brain.prototype.nextBar = function () {
     this.secBar++; this.phraseBar++;
     if (this.phraseBar === 8) { this.phraseBar = 0; this.mutate(); }
-    const enter = () => { this.planAt++; this.secBar = 0; this.phraseBar = 0; };
+    const enter = () => { this.planAt++; this.secBar = 0; this.phraseBar = 0; if (this.planAt >= this.plan.length) this.nextTrack(); };   // (past the plan's end: the next track)
+    const ins = (at, sec, len) => {                   // (0.5: full, the hands asking again and again) the last gives way
+      if (this.plan.length >= 40) { if (this.plan.length - 1 <= at) return; this.plan.pop(); }
+      this.plan.splice(at, 0, [sec, len]);
+    };
+    const keyUp = () => {                             // (0.5) KEY UP asked: a tone up as a drop begins
+      if (this.keyReq && this.planAt < this.plan.length && this.plan[this.planAt][0] === 'DROP' && this.secBar === 0) {
+        this.keyReq = false; this.key = (this.key + 2) % 12; this.pickSounds();
+      }
+    };
+    if (this.dropReq) {                               // (0.5) DROP: from this bar
+      this.dropReq = false; this.dive = 0;
+      if (this.plan[this.planAt][0] !== 'DROP') { ins(this.planAt + 1, 'DROP', 32); enter(); keyUp(); return; }
+    }
     if (this.dive) {                                  // DIVE: a build of that many bars now, then the drop
       const cur = this.plan[this.planAt], next = this.plan[this.planAt + 1];
       if (cur[0] === 'BUILD') {                       // (already climbing: this build ends at most that far, the drop follows)
         cur[1] = Math.max(this.secBar + 1, Math.min(cur[1], this.secBar + this.dive));
-        if (!next || next[0] !== 'DROP') this.plan.splice(this.planAt + 1, 0, ['DROP', 32]);
+        if (!next || next[0] !== 'DROP') ins(this.planAt + 1, 'DROP', 32);
         this.dive = 0;
-      } else { this.plan.splice(this.planAt + 1, 0, ['BUILD', this.dive], ['DROP', 32]); this.dive = 0; enter(); return; }
+      } else { ins(this.planAt + 1, 'BUILD', this.dive); ins(this.planAt + 2, 'DROP', 32); this.dive = 0; enter(); return; }
     }
-    if (this.breakReq) { this.breakReq = false; this.plan.splice(this.planAt + 1, 0, ['BREAK', 8]); enter(); return; }
-    if (this.secBar >= this.plan[this.planAt][1]) enter();
-    if (this.planAt >= this.plan.length) {             // the track ends: the next one, born of this one
+    if (this.breakReq) { this.breakReq = false; ins(this.planAt + 1, 'BREAK', 8); enter(); return; }
+    if (this.secBar >= this.plan[this.planAt][1]) {
+      if (this.stay && this.plan[this.planAt][0] !== 'BUILD') { const len = this.plan[this.planAt][1]; this.secBar = len >= 8 ? len - 8 : 0; }   // (0.5) STAY
+      else enter();
+    }
+    keyUp();
+    if (this.planAt >= this.plan.length) this.nextTrack();
+  };
+  Brain.prototype.nextTrack = function () {
+    {                                                 // the track ends: the next one, born of this one
       const prev = { key: this.key, bpm: this.bpm }, n = ++this.trackNo;
       let style = this.style;
       if (!this.styleLock && rng(hash(this.seed, 31)).chance(250)) {   // now and then a neighbouring style
@@ -420,6 +441,7 @@
   Brain.prototype.setSeed = function (c, style) { this.trackNo = 0; this.newTrack(typeof c === 'number' ? c : uncode(c), style || this.style, null); };
   Brain.prototype.reroll = function (L) { this.rerolls[L] = (this.rerolls[L] || 0) + 1; this.locks[L] = false; this.motifs(); this.pickSounds(); };
   Brain.prototype.lock = function (L, on) { this.locks[L] = !!on; };
+  Brain.prototype.remotif = function (L, d) { this.motifVer[L] = ((this.motifVer[L] || 0) + d) & 255; this.motifOnly = L; this.motifs(); this.motifOnly = null; };   // (0.5)
 
   const api = { Brain, STYLES, STYLE_NAMES, STYLE_ORDER, LAYERS, LAYERS_ALL, SOUND_LAYERS, SHAPE_NAMES, code, uncode, hash, rng };
   if (typeof globalThis !== 'undefined') globalThis.SirenBrain = api;

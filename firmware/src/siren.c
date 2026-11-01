@@ -66,8 +66,18 @@ static struct {
     int32_t spd_q12, bend, gate_q12;             /* the clock's speed (BRAKE, HALF), the parts' pitch, the gate */
     int32_t nz, nz1, nz2, nz_lvl;        /* the riser's noise */
     volatile int8_t q_style; uint8_t q_now;      /* (0.3) the style asked for, on the next phrase (-1 none); now */
+    /* (0.5) the mixer: the master filter (K1, -63 low-pass .. 63 high-pass), the space (K3, % of the sends); each
+     * layer's volume (P_LEVEL steps, 2 a dB), filter (-63..63), space (%); each sound's own trim and tone (its
+     * calibration, siren_data.h SD_TRIM / SD_TONE: the same loudness in its layer, its hard highs softened) */
+    int8_t ufilt; uint16_t space; int8_t lvol[7], lflt[7]; uint16_t lspace[7]; int8_t trim[7], tone[7];
+    /* (0.5) the arrangement: when each melodic layer last had a note written (sixteenths), the ones allowed now (at
+     * most three at once, by the section's priorities); a drum fill asked for, playing; the next track on the phrase */
+    uint32_t last_note[7]; uint8_t allowed, focus, fill_req, fill_on, q_next;
+    int16_t bcut[7];                             /* the brain's own filter for each layer, as it last wrote it */
 } sr;
-enum { SC_PLAY, SC_STOP, SC_KNOB, SC_DIVE, SC_BREAK, SC_STYLE, SC_SEED, SC_REROLL, SC_LOCK, SC_STYLELOCK, SC_PUNCH, SC_STYLEQ };
+enum { SC_PLAY, SC_STOP, SC_KNOB, SC_DIVE, SC_BREAK, SC_STYLE, SC_SEED, SC_REROLL, SC_LOCK, SC_STYLELOCK, SC_PUNCH, SC_STYLEQ,
+       SC_DROP, SC_FILL, SC_REMOTIF, SC_KEYUP, SC_NEXT, SC_STAY, SC_SOUND, SC_MIX };   /* (0.5) the black keys, the mixer */
+enum { SM_FILT, SM_SPACE, SM_FOCUS, SM_LVOL = 10, SM_LFLT = 20, SM_LSPACE = 30 };  /* SC_MIX's targets (+ the layer) */
 
 /* the main loop's way into the brain */
 static void siren_cmd(uint32_t op, int32_t a, int32_t b, uint32_t c)
@@ -243,6 +253,35 @@ static void siren_px_block(uint32_t adv)
 static int32_t siren_bend(void) { return sr.bend; }                /* (voice.c: 1/4096 semitone on every part) */
 static int32_t siren_eq_db(uint32_t band) { return sr.eqk[band % 3u]; }   /* (bus.c) */
 
+/* (0.5) PRESETS turned on a layer: the next or previous sound of the style's selection for it (a kit for the drums),
+ * kept from then on (the layer locked: the brain's next tracks leave it) */
+static void siren_sound_step(int32_t L, int32_t d)
+{
+    const sb_palette_t *p = sb.pal;
+    int32_t n;
+    if (L < 0 || L > L_FX || !p)
+        return;
+    if (L == L_DRUMS) {
+        n = p->nkits[sb.style];
+        if (n) { sb.kit_pick = (uint32_t)((sb.snd[L_DRUMS] + d % n + n) % n); sb_pick_sounds(&sb); }
+        return;
+    }
+    n = p->ncur[sb.style][L];
+    if (n < 1)
+        return;
+    sb.snd[L] = (int16_t)((sb.snd[L] + d % n + n) % n);
+    sb.locks[L] = 1; sb.sounds_changed = 1;
+}
+static void siren_mix_set(int32_t what, int32_t v)
+{
+    if (what == SM_FILT) sr.ufilt = (int8_t)sb_clamp(v, -63, 63);
+    else if (what == SM_SPACE) sr.space = (uint16_t)sb_clamp(v, 0, 200);
+    else if (what == SM_FOCUS) sr.focus = (uint8_t)(v > 0 && v <= L_FX ? v : 0);   /* (the layer in the hands: it plays) */
+    else if (what >= SM_LVOL && what < SM_LVOL + 7) sr.lvol[what - SM_LVOL] = (int8_t)sb_clamp(v, -30, 12);
+    else if (what >= SM_LFLT && what < SM_LFLT + 7) sr.lflt[what - SM_LFLT] = (int8_t)sb_clamp(v, -63, 63);
+    else if (what >= SM_LSPACE && what < SM_LSPACE + 7) sr.lspace[what - SM_LSPACE] = (uint16_t)sb_clamp(v, 0, 200);
+}
+
 static void siren_commands(void)                 /* (audio interrupt) */
 {
     while (sr.cr != sr.cw) {
@@ -261,6 +300,14 @@ static void siren_commands(void)                 /* (audio interrupt) */
         case SC_STYLELOCK: sb.style_lock = (uint8_t)a; break;
         case SC_PUNCH: if (a < 0) siren_px_end(); else siren_px_start((uint32_t)a); break;
         case SC_STYLEQ: if (a == sr.q_style) sr.q_now = 1; else { sr.q_style = (int8_t)a; sr.q_now = 0; } break;   /* (twice: now) */
+        case SC_DROP: sb.drop_req = 1; break;
+        case SC_FILL: sr.fill_req = 1; break;
+        case SC_REMOTIF: if (a >= 0 && a < 7) sb_remotif(&sb, a, b); break;
+        case SC_KEYUP: sb.key_req = 1; break;
+        case SC_NEXT: sr.q_next = (uint8_t)(sr.q_next ? 2 : 1); break;   /* (twice: now) */
+        case SC_STAY: sb.stay = (uint8_t)!sb.stay; break;
+        case SC_SOUND: siren_sound_step(a, b); break;
+        case SC_MIX: siren_mix_set(a, b); break;
         }
         sr.cr++;
     }
@@ -287,8 +334,8 @@ static void siren_wobble(uint32_t adv)
 static void siren_play(const sb_note_t *x, int tr, uint32_t len)
 {
     uint32_t n = (uint32_t)sb_clamp((int)x->note + (x->layer == L_DRUMS ? 0 : tr), 0, 127), tk = 0xFFu, k;
-    if (sr.mute[x->layer])
-        return;
+    if (sr.mute[x->layer] || (x->layer >= L_ARP && x->layer <= L_FX && !((sr.allowed >> x->layer) & 1u)))
+        return;                                  /* (0.5: a melodic layer over the three the section affords) */
     if (x->layer == L_DRUMS) {
         trk_note_on1(TDRUM, x->note, x->vel);
         if (x->note == 36u) sr.kicks++;
@@ -365,6 +412,77 @@ static void siren_replay(uint32_t k, uint32_t len16, uint32_t u16)
     sr.r_rep++;
 }
 
+/* (0.5) the arrangement: at most three melodic layers at once over the bass and the drums (arp, hook, pad, stabs, fx),
+ * the ones the section needs most among those the brain wrote for in the last eight bars (and the one in the hands
+ * first). The others wait, their notes still written (a slot freed, a mute, the next section: they are back) */
+static const uint8_t SIREN_PRI[7][5] = {
+    {L_PAD, L_ARP, L_HOOK, L_FX, L_STAB},       /* INTRO */
+    {L_ARP, L_HOOK, L_STAB, L_PAD, L_FX},       /* GROOVE */
+    {L_FX, L_ARP, L_PAD, L_HOOK, L_STAB},       /* BUILD */
+    {L_HOOK, L_STAB, L_ARP, L_PAD, L_FX},       /* DROP */
+    {L_PAD, L_HOOK, L_ARP, L_FX, L_STAB},       /* BREAK */
+    {L_HOOK, L_ARP, L_STAB, L_PAD, L_FX},       /* PEAK */
+    {L_PAD, L_ARP, L_HOOK, L_STAB, L_FX},       /* OUTRO */
+};
+#define SIREN_MELO3 ((1u << L_ARP) | (1u << L_HOOK) | (1u << L_PAD) | (1u << L_STAB) | (1u << L_FX))
+static int siren_wrote(uint32_t L, uint32_t now) { return sr.last_note[L] && now + 1u - sr.last_note[L] <= 128u; }
+static void siren_arrange(uint32_t sec, uint32_t now)
+{
+    uint32_t k, n = 0, a = 0, gone, L;
+    if (sr.focus >= L_ARP && sr.focus <= L_FX && !sr.mute[sr.focus]) { a = 1u << sr.focus; n = 1; }
+    for (k = 0; k < 5u && n < 3u; k++) {
+        L = SIREN_PRI[sec % 7u][k];
+        if (((a >> L) & 1u) || sr.mute[L] || !siren_wrote(L, now))
+            continue;
+        a |= 1u << L; n++;
+    }
+    gone = sr.allowed & SIREN_MELO3 & ~a;
+    for (L = L_ARP; L <= L_FX; L++)
+        if ((gone >> L) & 1u)
+            trk_all_off1(SIREN_PART(L));         /* (released: its tail fades) */
+    sr.allowed = (uint8_t)(a | (1u << L_DRUMS) | (1u << L_BASS) | (1u << L_SUB));
+}
+/* (0.5) the black key FILL: the second half of the next bar a fill on the snare and the toms, rising, then a crash */
+static void siren_fill(uint32_t step)
+{
+    static const uint8_t FN[8] = {38, 50, 38, 47, 38, 45, 38, 41};
+    sb_note_t x;
+    uint32_t k = step - 8u;
+    x.layer = L_DRUMS; x.len = 1;
+    x.note = FN[k]; x.vel = (uint8_t)(62 + k * 8u);
+    if (!siren_held_back(&x)) siren_play(&x, 0, 0);
+    if (k >= 4u && (k & 1u)) { x.note = 38; if (!siren_held_back(&x)) siren_play(&x, 0, 0); }
+}
+static int16_t siren_level(uint32_t L)           /* a part's level: its layer's place, its sound's trim, the hand's */
+{
+    return (int16_t)sb_clamp(SIREN_MIX[L - 1u][0] + sr.trim[L] + sr.lvol[L], 1, 127);
+}
+/* (0.5) the mixer, every sixteenth: each layer's level, filter (the brain's, the sound's tone ceiling, the hand's:
+ * down a low-pass deeper, up a high-pass), sends (the space, the master's and the layer's); the drums' the same; the
+ * master's filter (K1: the hand's low-pass, or its high-pass over the build's) */
+static void siren_mixer(const sb_events_t *ev)
+{
+    uint32_t L, st = sb.style % SB_NSTYLES;
+    int32_t ls, hp = ev->hp * 63 / 1000, keep = sr.px == SPX_ECHO || sr.px == SPX_DUB || sr.px == SPX_WASH;
+    for (L = L_BASS; L <= L_FX; L++) {
+        track_t *t = SIREN_PART(L);
+        int32_t lp = sr.bcut[L] < sr.tone[L] ? sr.bcut[L] : sr.tone[L], f = sr.lflt[L];
+        ls = (int32_t)sr.lspace[L] * sr.space / 100;
+        t->p[P_TFLT] = (int16_t)(f > 0 ? f : sb_clamp(lp + f, -60, 0));
+        t->p[P_LEVEL] = siren_level(L);
+        t->p[P_REV] = (int16_t)sb_clamp(SIREN_MIX[L - 1u][3] * (450 + ev->verb / 2) / 1000 * ls / 100, 0, 127);
+        if (!keep) t->p[P_DLY] = (int16_t)sb_clamp(SIREN_MIX[L - 1u][2] * ls / 100, 0, 127);
+    }
+    ls = (int32_t)sr.lspace[L_DRUMS] * sr.space / 100;
+    song.g[G_DRLVL] = (int16_t)sb_clamp(SIREN_DMIX[st][0] * (100 + sr.lvol[L_DRUMS] * 6) / 100, 0, 127);
+    TDRUM->p[P_TFLT] = sr.lflt[L_DRUMS];
+    if (!keep) {
+        song.g[G_DRREV] = (int16_t)sb_clamp(SIREN_DMIX[st][1] * ls / 100, 0, 127);
+        song.g[G_DRDLY] = (int16_t)sb_clamp(SIREN_DMIX[st][2] * ls / 100, 0, 127);
+    }
+    song.g[G_FILT] = (int16_t)(sr.ufilt < 0 ? sr.ufilt : sr.ufilt > hp ? sr.ufilt : hp);
+}
+
 /* one sixteenth: the brain's events into the parts and the drums */
 static void siren_fire(void)
 {
@@ -375,8 +493,17 @@ static void siren_fire(void)
         sr.q_style = -1; sr.q_now = 0;
         siren_px_end(); siren_all_off(); sb_set_seed(&sb, sb.seed, st);
     }
+    if (sr.q_next && (sr.q_next == 2u || (sb.step == 0 && sb.phrase_bar == 0))) {   /* (0.5) NEXT: on the phrase (twice: now) */
+        sr.q_next = 0; sr.fill_on = 0;
+        siren_px_end(); siren_all_off(); sb_next_track(&sb);
+    }
     s = sr.n16++;
     sb_step16(&sb, ev);
+    for (i = 0; i < ev->nnotes; i++)                 /* (0.5) the layers the brain writes for, for the arrangement */
+        if (ev->notes[i].layer < 7u) sr.last_note[ev->notes[i].layer] = s + 1u;
+    if (ev->step == 0 || !sr.allowed)
+        siren_arrange(ev->sec, s);
+    if (sr.fill_req && ev->step == 8) { sr.fill_req = 0; sr.fill_on = 1; }
     song.g[G_BPM] = ev->bpm;
     {   /* (0.4) the CPU guard: the real load of every half buffer since the last sixteenth (audio.c, %), the worst and
          * the mean. Up a level at once when a half went over 90 % (or the mean over 80 %), at least one at 78 % and
@@ -411,7 +538,17 @@ static void siren_fire(void)
             continue;
         if (sr.lean && siren_lean_skip(x, ev, &npad, &nstab))
             continue;
+        if (sr.fill_on && x->layer == L_DRUMS && (ev->step >= 8 ? x->note >= 38u && x->note <= 40u : x->note == 49u))
+            continue;                            /* (the fill's snare is the snare; its crash the crash) */
         siren_play(x, 0, (uint32_t)(x->len * (u16 / 100u) * 92u));
+    }
+    if (sr.fill_on) {
+        if (ev->step >= 8) siren_fill(ev->step);
+        else {
+            sb_note_t x; x.layer = L_DRUMS; x.note = 49; x.vel = 112; x.len = 1;
+            sr.fill_on = 0;
+            if (!siren_held_back(&x)) siren_play(&x, 0, 0);
+        }
     }
     if (sr.r_on) {
         siren_replay((s - sr.r_d0) % sr.r_len, sr.r_len, u16);
@@ -424,17 +561,14 @@ static void siren_fire(void)
     }
     /* the filters: each part's one-knob filter, closed as the energy falls (the sound's own cutoff kept above 0.7) */
     for (i = L_BASS; i <= L_FX; i++) {
-        track_t *t = SIREN_PART(i);
         int32_t c = ev->cut[i];
         if (c < 0)
             continue;
-        t->p[P_TFLT] = (int16_t)(i == L_FX ? (c >= 950 ? 0 : -(950 - c) * 45 / 850) : (c >= 700 ? 0 : -(700 - c) * 40 / 700));
+        sr.bcut[i] = (int16_t)(i == L_FX ? (c >= 950 ? 0 : -(950 - c) * 45 / 850) : (c >= 700 ? 0 : -(700 - c) * 40 / 700));
     }
-    /* the master: the build's high-pass, the duck, the reverb (the parts' sends), the gain */
-    song.g[G_FILT] = (int16_t)(ev->hp * 63 / 1000);
+    /* the master: the build's high-pass, the duck, the reverb (the parts' sends), the gain; the hands' mix (0.5) */
     sr.duck = ev->duck * 33;
-    for (i = 0; i < 6u; i++)
-        trk[i].p[P_REV] = (int16_t)(SIREN_MIX[i][3] * (450 + ev->verb / 2) / 1000);
+    siren_mixer(ev);
     sr.gain_q12 = ev->gain * 4096 / 1000 * 11 / 10;
     sr.seq++;
 }
@@ -551,14 +685,18 @@ static void siren_service(void)
         if (want < 0 || !sp->n || (want == sr.applied[L] && style == sr.applied_style[L]))
             continue;
         {
-            const sd_snd_t *s = &SD_SND[SD_LIST[sp->first + want % sp->n]];
+            uint32_t at = sp->first + (uint32_t)want % sp->n;
+            const sd_snd_t *s = &SD_SND[SD_LIST[at]];
             int16_t pe, e = siren_find(s, &pe);
             track_t *t = SIREN_PART(L);
             sr.applied[L] = want; sr.applied_style[L] = (int16_t)style;
             if (e < 0)
                 continue;
+#ifdef SD_HAS_TRIM
+            sr.trim[L] = SD_TRIM[at]; sr.tone[L] = SD_TONE[at];   /* (0.5) its calibration */
+#endif
             siren_load_sound(t, (uint32_t)e, (uint32_t)pe);
-            t->p[P_LEVEL] = SIREN_MIX[L - 1][0]; t->p[P_PAN] = SIREN_MIX[L - 1][1];
+            t->p[P_LEVEL] = siren_level(L); t->p[P_PAN] = SIREN_MIX[L - 1][1];
             t->p[P_DLY] = SIREN_MIX[L - 1][2]; t->p[P_REV] = SIREN_MIX[L - 1][3]; t->p[P_CHOR] = 0;
             t->p[P_AMODE] = 0;                   /* (the brain is the arpeggiator: a preset's arp off) */
             sr.sound_eng[L] = e; sr.sound_pre[L] = pe;
@@ -585,6 +723,8 @@ static void siren_init(void)
     for (i = 0; i < 7u; i++) sr.applied[i] = -1, sr.applied_style[i] = -1;
     sr.ap_kick = -1; sr.gain_q12 = 4096;
     sr.spd_q12 = 4096; sr.gate_q12 = 4096; sr.eqk[0] = sr.eqk[1] = sr.eqk[2] = 12; sr.nz = 0x5EED; sr.px = SPX_NONE; sr.q_style = -1;
+    sr.space = 100;
+    for (i = 0; i < 7u; i++) sr.lspace[i] = 100;
     for (i = 0; i < NTRK; i++) {
         trk[i].p[P_MUTE] = 0;
         trk[i].p[P_AMODE] = 0;

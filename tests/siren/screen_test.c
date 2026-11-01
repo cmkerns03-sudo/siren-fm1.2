@@ -33,13 +33,17 @@ int main(int argc, char **argv)
     memset(trk, 0, sizeof trk); host_tracks_init(); siren_init();
     siren_cmd(SC_STYLELOCK, 1, 0, 0); siren_cmd(SC_SEED, style, 0, seed); siren_cmd(SC_PLAY, 0, 0, 0); song.playing = 1;
     su.knob[0] = 720; su.knob[1] = 500; su.knob[2] = 450; su.knob[3] = 350; su.px_key = -1;
+    su.held = -1; su.focus = L_HOOK; su.space = 100; for (b = 0; b < 7u; b++) su.lspace[b] = 100;   /* (as siren_ui_init) */
     for (b = 0; b < blocks; b++) {
         uint32_t t = b / frame_every * frame_every;
         if (b == 4u * FS / CTL) siren_cmd(SC_DIVE, 4, 0, 0);
         if (b == 20u * FS / CTL) { su.locks[3] = 1; sr.mute[4] = 1; }
         if (b == 50u * FS / CTL) { su.px_key = 1; siren_cmd(SC_PUNCH, 1, 0, 0); }
         if (b == 54u * FS / CTL) { su.px_key = -1; siren_cmd(SC_PUNCH, -1, 0, 0); }
+        if (b == 30u * FS / CTL) { su.held = L_HOOK; su.lvol[L_HOOK] = -6; su.lflt[L_HOOK] = 24; su.lspace[L_HOOK] = 140; }   /* (0.5) a strip */
+        if (b == 34u * FS / CTL) { su.held = -1; su.focus = L_PAD; su.mfilt = -24; su.space = 150; su.snd_t = 60; }
         if (b == 60u * FS / CTL) { su.info = 1; su.px_key = 8; }
+        if (b == 66u * FS / CTL) { su.info = 2; su.px_key = -1; }
         if (b % 40 == 0) siren_service();
         mix_block_svc(out, CTL);
         song.cpu_q8 = 80;
@@ -50,7 +54,9 @@ int main(int argc, char **argv)
             (void)after; (void)before;
             if (b == t && (b == 3u * FS / CTL / frame_every * frame_every || b == 12u * FS / CTL / frame_every * frame_every ||
                 (sr.ev.sec == 3 && sr.ev.sec_bar == 0 && sr.ev.step == 1 && shot < 4) || b == 25u * FS / CTL / frame_every * frame_every ||
-                b == 52u * FS / CTL / frame_every * frame_every || b == 62u * FS / CTL / frame_every * frame_every)) save(argv[3], shot++);
+                b == 52u * FS / CTL / frame_every * frame_every || b == 62u * FS / CTL / frame_every * frame_every ||
+                b == 32u * FS / CTL / frame_every * frame_every || b == 35u * FS / CTL / frame_every * frame_every ||
+                b == 68u * FS / CTL / frame_every * frame_every)) save(argv[3], shot++);
         }
     }
     printf("screen: %d shots; %u frames, %.0f pixels sent a frame on average (a full screen: 57600)\n", shot, frames, (double)drawn / frames);

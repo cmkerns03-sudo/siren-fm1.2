@@ -188,8 +188,8 @@ static sb_bstep_t sb_bs(int d, int o, int len, int v) { sb_bstep_t s; s.d = (int
 static void sb_motifs(sb_brain_t *b)
 {
     const sb_style_t *st = SB_ST(b); int G = st->groove, i, j;
-#define SB_RL(L) sb_rng(sb_hash(b->seed, (uint32_t)(1000 + (L) * 17 + b->rerolls[L] * 977)))
-#define SB_KEEP(L) (b->locks[L] && b->pat_init)
+#define SB_RL(L) sb_rng(sb_hash(b->seed, (uint32_t)(1000 + (L) * 17 + b->rerolls[L] * 977 + b->motif_ver[L] * 313)))
+#define SB_KEEP(L) ((b->locks[L] || (b->motif_only && !((b->motif_only >> (L)) & 1u))) && b->pat_init)
     if (!SB_KEEP(L_DRUMS)) {
         static const uint8_t BK_DNB0[] = {0, 10}, BK_DNB2[] = {0, 7, 10}, BK_DNB3[] = {0, 6, 10}, BK_DNB4[] = {0, 10, 13};
         static const uint8_t BK_H0[] = {0}, BK_H1[] = {0, 10}, BK_H2[] = {0, 6}, BK_H3[] = {0, 11, 14}, BK_H4[] = {0, 3, 10}, BK_H5[] = {0, 7};
@@ -340,11 +340,24 @@ static int sb_energy(const sb_brain_t *b) { return sb_clamp(sb_arc_energy(b) + (
 static void sb_plan_insert(sb_brain_t *b, int at, int sec, int len)
 {
     int i;
-    if (b->plan_n >= SB_PLAN_MAX) return;
+    if (b->plan_n >= SB_PLAN_MAX) {                      /* (0.5: full, the hands asking again and again) the plan's last */
+        if (b->plan_n - 1 <= at) return;                 /* section gives way */
+        b->plan_n--;
+    }
     for (i = b->plan_n; i > at; i--) { b->plan_sec[i] = b->plan_sec[i - 1]; b->plan_len[i] = b->plan_len[i - 1]; }
     b->plan_sec[at] = (uint8_t)sec; b->plan_len[at] = (uint16_t)len; b->plan_n++;
 }
-static void sb_enter(sb_brain_t *b) { b->plan_at++; b->sec_bar = 0; b->phrase_bar = 0; }
+static void sb_enter(sb_brain_t *b)                      /* the next section (past the plan's end: the next track) */
+{
+    b->plan_at++; b->sec_bar = 0; b->phrase_bar = 0;
+    if (b->plan_at >= b->plan_n) sb_next_track(b);
+}
+static void sb_key_up(sb_brain_t *b)                     /* (0.5) KEY UP asked: a tone up as a drop begins */
+{
+    if (b->key_req && b->plan_at < b->plan_n && b->plan_sec[b->plan_at] == SEC_DROP && b->sec_bar == 0) {
+        b->key_req = 0; b->key = (uint8_t)((b->key + 2) % 12); sb_pick_sounds(b);
+    }
+}
 
 /* a bar ends: every 8 bars the sb_motifs develop; DIVE and BREAK change the plan on the next bar; the next section,
  * and at the plan's end the next track, born of this one */
@@ -352,6 +365,10 @@ static void sb_next_bar(sb_brain_t *b)
 {
     b->sec_bar++; b->phrase_bar++;
     if (b->phrase_bar == 8) { b->phrase_bar = 0; sb_mutate(b); }
+    if (b->drop_req) {                                   /* (0.5) DROP: from this bar */
+        b->drop_req = 0; b->dive = 0;
+        if (b->plan_sec[b->plan_at] != SEC_DROP) { sb_plan_insert(b, b->plan_at + 1, SEC_DROP, 32); sb_enter(b); sb_key_up(b); return; }
+    }
     if (b->dive) {
         if (b->plan_sec[b->plan_at] == SEC_BUILD) {
             int len = b->plan_len[b->plan_at], lim = b->sec_bar + b->dive;
@@ -362,8 +379,21 @@ static void sb_next_bar(sb_brain_t *b)
         } else { sb_plan_insert(b, b->plan_at + 1, SEC_BUILD, b->dive); sb_plan_insert(b, b->plan_at + 2, SEC_DROP, 32); b->dive = 0; sb_enter(b); return; }
     }
     if (b->break_req) { b->break_req = 0; sb_plan_insert(b, b->plan_at + 1, SEC_BREAK, 8); sb_enter(b); return; }
-    if (b->sec_bar >= b->plan_len[b->plan_at]) sb_enter(b);
-    if (b->plan_at >= b->plan_n) {
+    if (b->sec_bar >= b->plan_len[b->plan_at]) {
+        if (b->stay && b->plan_sec[b->plan_at] != SEC_BUILD) {   /* (0.5) STAY: the section's last phrase again */
+            int len = b->plan_len[b->plan_at];
+            b->sec_bar = (uint16_t)(len >= 8 ? len - 8 : 0);
+        } else
+            sb_enter(b);
+    }
+    sb_key_up(b);
+    if (b->plan_at >= b->plan_n)
+        sb_next_track(b);
+}
+/* the track ends: the next one, born of this one (its key and tempo near), now and then in a neighbouring style */
+void sb_next_track(sb_brain_t *b)
+{
+    {
         int pk = b->key, pb = b->bpm, style = b->style; uint32_t n = ++b->track_no;
         sb_rng_t r1 = sb_rng(sb_hash(b->seed, 31));
         if (!b->style_lock && sb_rchance(&r1, 250)) {
@@ -525,5 +555,10 @@ void sb_set_seed(sb_brain_t *b, uint32_t seed, int style) { b->track_no = 0; sb_
 void sb_reroll(sb_brain_t *b, int L) { b->rerolls[L]++; b->locks[L] = 0; sb_motifs(b); sb_pick_sounds(b); }
 /* (0.2) REWIND: the section from its first beat again (the DJ's reload); the bars go on counting */
 void sb_rewind(sb_brain_t *b) { b->sec_bar = 0; b->phrase_bar = 0; b->step = 0; }
+void sb_remotif(sb_brain_t *b, int L, int delta)
+{
+    b->motif_ver[L] = (uint8_t)(b->motif_ver[L] + delta);
+    b->motif_only = (uint8_t)(1u << L); sb_motifs(b); b->motif_only = 0;
+}
 void sb_lock(sb_brain_t *b, int L, int on) { b->locks[L] = (uint8_t)(on ? 1 : 0); }
 void sb_knob(sb_brain_t *b, int k, int v) { b->knobs[k] = (int16_t)sb_clamp(v, 0, 1000); if (k == K_DENSITY) sb_motifs(b); }

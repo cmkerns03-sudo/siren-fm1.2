@@ -12,6 +12,12 @@ for (let i = 0; i < steps; i++) {
   if (i % 3001 === 2000) { b.knobs[KN[Math.floor(i / 3001) % 4]] = (i * 37) % 1001; if (KN[Math.floor(i / 3001) % 4] === 'density') b.motifs(); }
   if (i % 9001 === 4500) b.reroll(LN[1 + Math.floor(i / 9001) % 6]);
   if (i % 6007 === 3000) b.lock(LN[Math.floor(i / 6007) % 7], Math.floor(i / 6007) % 2);
+  if (i % 4001 === 1500) b.dropReq = true;                                     // (0.5) the black keys
+  if (i % 8009 === 2500) b.stay = !b.stay;
+  if (i % 6997 === 3500) b.keyReq = true;
+  if (i % 2003 === 1000) b.remotif(LN[Math.floor(i / 2003) % 7], Math.floor(i / 2003) % 3 === 0 ? -1 : 1);
+  if (i % 11003 === 9000) b.nextTrack();
+  if (i >= 12000 && i < 16000 && i % 53 === 7) { if (i % 2) b.breakReq = true; else b.dropReq = true; }   // (0.5) the plan full: the hands again and again
   const ev = b.step16();
   let l = `${i} ${ev.info.sec} ${STY.indexOf(b.style)} e${ev.info.e} b${ev.info.bpm} k${ev.info.key} c${ev.info.chord}`;
   for (const [L, n, v, len] of ev.notes) l += ` ${L}:${n}:${v}:${len}`;

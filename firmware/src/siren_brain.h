@@ -44,6 +44,10 @@ typedef struct {
     uint32_t track_no, bar; uint8_t step, phrase_bar;
     const sb_palette_t *pal;
     uint8_t dive, break_req;
+    /* (0.5) the hands: the drop at the next bar, the section held (looped on its last phrase), the key up a tone at
+     * the next drop; a layer's motif version (a new melody, bassline, groove: the sound kept), and while they are
+     * written again, only those layers (a mask; 0: all) */
+    uint8_t drop_req, stay, key_req, motif_only; uint8_t motif_ver[SB_NLAYERS];
     /* the track */
     uint8_t scale, key, bpm, bpm_target; const uint8_t *prog; uint8_t nprog, chord_bars;
     uint32_t kit_pick; uint8_t swing, bass_kind;
@@ -70,7 +74,9 @@ void sb_set_seed(sb_brain_t *b, uint32_t seed, int style);   /* style -1: keep *
 void sb_step16(sb_brain_t *b, sb_events_t *ev);
 void sb_reroll(sb_brain_t *b, int layer);
 void sb_lock(sb_brain_t *b, int layer, int on);
-void sb_rewind(sb_brain_t *b);                               /* (0.2) the section from its first beat */
+void sb_rewind(sb_brain_t *b);
+void sb_next_track(sb_brain_t *b);                           /* (0.5) the track ends now: the next one */
+void sb_remotif(sb_brain_t *b, int layer, int delta);        /* (0.5) another motif for that layer, its sound kept */                               /* (0.2) the section from its first beat */
 void sb_knob(sb_brain_t *b, int k, int v);                   /* per mille */
 void sb_code(uint32_t seed, char out[9]);                    /* "XXX-XXXX" */
 uint32_t sb_uncode(const char *c);

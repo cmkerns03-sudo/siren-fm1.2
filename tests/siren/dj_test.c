@@ -64,8 +64,9 @@ int main(int argc, char **argv)
             CHECK(after > 0.02, "%s: the set did not come back (%.3f)", P->name, after);
             if (P->fx == SPX_CUT || P->fx == SPX_BRAKE || P->fx == SPX_REWIND)
                 CHECK(during < 0.02, "%s: not silent in its second bar (%.3f)", P->name, during);
-            if (P->fx == SPX_ECHO || P->fx == SPX_WASH)       /* (the tail goes on: quieter, or quiet) */
-                CHECK(during < before * 0.8 || during < 0.08, "%s: not quieter (%.3f vs %.3f)", P->name, during, before);
+            if (P->fx == SPX_ECHO || P->fx == SPX_WASH)       /* (the tail goes on: quieter, or quiet; in a break, a pad's */
+                CHECK(during < before * 0.8 || during < 0.08 || before_lo < before * 0.4,   /* tail is as loud as the pad) */
+                      "%s: not quieter (%.3f vs %.3f)", P->name, during, before);
             if (P->fx == SPX_KLOW) CHECK(during_lo < before_lo * 0.5, "KILL LOW: the low end stayed (%.3f vs %.3f)", during_lo, before_lo);
             if (P->fx == SPX_ROLL || P->fx == SPX_PROLL || P->fx == SPX_DROLL || P->fx == SPX_GATE || P->fx == SPX_HALF)
                 CHECK(during > 0.02 || before < 0.1, "%s: silent while held", P->name);

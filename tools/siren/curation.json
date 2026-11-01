@@ -13,7 +13,6 @@
   ],
   "ARP": [
    "ANALOG:SQR PLUCK",
-   "PHASE:RESO PLUCK",
    "ACID:ACID ARP",
    "DIGITAL:FM PLUCK",
    "JUNO:ARP PLUCK",
@@ -24,10 +23,8 @@
   "HOOK": [
    "TRIO:DUB CHORD",
    "TRIO:MIN STAB",
-   "ACID:DEEP 303",
    "HYBRID:SOFT SYNC",
    "ANALOG:PWM LEAD",
-   "PHASE:CZ RESO",
    "WSEQ:RHYTHM SEQ"
   ],
   "PAD": [
@@ -48,7 +45,6 @@
   "FX": [
    "NOISE:RISER",
    "NOISE:WHOOSH",
-   "NOISE:NZ METAL",
    "NOISE:STATIC",
    "NOISE:WIND"
   ]
@@ -117,7 +113,6 @@
    "ACID:ACID ARP",
    "DIGITAL:FM PLUCK",
    "FMX:FMX PLUCK",
-   "PHASE:RESO PLUCK",
    "WSEQ:NOISY SEQ",
    "ACID:SQUELCH"
   ],
@@ -145,11 +140,9 @@
   ],
   "FX": [
    "NOISE:TONAL NZ",
-   "LOFI:ZAP",
    "NOISE:RADIO",
    "NOISE:RISER",
-   "NOISE:WHOOSH",
-   "NOISE:NZ ARCADE"
+   "NOISE:WHOOSH"
   ]
  },
  "ACID": {
@@ -168,12 +161,10 @@
    "ACID:ACID ARP",
    "ACID:SQUELCH",
    "ACID:SQR SQUELCH",
-   "ANALOG:SQR PLUCK",
-   "PHASE:RESO PLUCK"
+   "ANALOG:SQR PLUCK"
   ],
   "HOOK": [
    "ACID:ACID LEAD",
-   "ACID:DEEP 303",
    "ACID:DIST ACID",
    "ACID:FUZZ ACID",
    "ACID:SQR LEAD"
@@ -194,8 +185,7 @@
   "FX": [
    "NOISE:RISER",
    "NOISE:WHOOSH",
-   "NOISE:TONAL NZ",
-   "LOFI:ZAP"
+   "NOISE:TONAL NZ"
   ]
  },
  "RAVE": {
@@ -237,9 +227,7 @@
    "JUNO:SYNTH BRASS 2"
   ],
   "FX": [
-   "NOISE:NZ ARCADE",
    "NOISE:RISER",
-   "LOFI:ZAP",
    "NOISE:BITCRUSH",
    "NOISE:WHOOSH",
    "NOISE:RADIO"
@@ -282,12 +270,10 @@
    "TRIO:MIN STAB"
   ],
   "FX": [
-   "NOISE:NZ METAL",
    "NOISE:BITCRUSH",
    "NOISE:RISER",
    "NOISE:STATIC",
-   "NOISE:WHOOSH",
-   "LOFI:ZAP"
+   "NOISE:WHOOSH"
   ]
  },
  "DNB": {
@@ -301,7 +287,6 @@
    "TRIO:FAT BASS"
   ],
   "ARP": [
-   "PHASE:RESO PLUCK",
    "DIGITAL:FM PLUCK",
    "JUNO:ARP PLUCK",
    "ANALOG:SQR PLUCK",
@@ -335,8 +320,7 @@
    "NOISE:WHOOSH",
    "NOISE:RADIO",
    "NOISE:STATIC",
-   "NOISE:OCEAN",
-   "LOFI:ZAP"
+   "NOISE:OCEAN"
   ]
  },
  "HOUSE": {
@@ -389,8 +373,7 @@
    "NOISE:WHOOSH",
    "NOISE:OCEAN",
    "NOISE:TONAL NZ",
-   "NOISE:STATIC",
-   "LOFI:ZAP"
+   "NOISE:STATIC"
   ]
  }
 }

@@ -13,6 +13,11 @@ D = Path(__file__).with_name('siren')
 STY = ['TECHNO', 'TRANCE', 'PSY', 'ACID', 'RAVE', 'HARD', 'DNB', 'HOUSE']
 LAY = ['DRUMS', 'BASS', 'ARP', 'HOOK', 'PAD', 'STAB', 'FX']
 cur = json.loads((D / 'curation.json').read_text()); kits = json.loads((D / 'kits.json').read_text())
+# (0.5) each sound's calibration in its layer (tests/siren/level_cal.c -> tools/siren/levels.json): the trim (P_LEVEL
+# steps, 2 a dB) that brings it to its layer's loudness, the tone (the track filter's low-pass, 0 open) that softens its
+# hard highs. "LAYER|ENGINE:PRESET"
+lev = json.loads((D / 'levels.json').read_text()) if (D / 'levels.json').exists() else {}
+trims, tones = [], []
 # (0.2) the engines a set can afford on the FM-1, six parts at once: no GRAIN, VPS, MACRO, VECTOR, STRINGS, TERRAIN, PHYS,
 # SAMPLE, FM6 (its patch waits for the main loop's fm6_poll, Clipper's screen) or WAVE (one table in RAM)
 LIGHT = {'ANALOG', 'ACID', 'TRIO', 'DIGITAL', 'PHASE', 'LOFI', 'NOISE', 'WHEEL', 'HYBRID', 'JUNO', 'WSEQ', 'FMX', 'VOICE', 'WOB'}
@@ -36,11 +41,15 @@ for s in STY:
             if e not in LIGHT: sys.exit(f'gen_siren: {k} ({s} {L}): {e} is not one of the engines SIREN can afford')
             if (e, p) not in idx: idx[(e, p)] = len(snd); snd.append((e, p))
             lst.append(idx[(e, p)])
+            if lev and f'{L}|{e}:{p}' not in lev: sys.exit(f'gen_siren: {L}|{e}:{p} has no calibration: run tests/siren/level_cal > tools/siren/levels.json')
+            c = lev.get(f'{L}|{e}:{p}', {}); trims.append(int(c.get('trim', 0))); tones.append(int(c.get('tone', 0)))
     spans.append(row)
 o.append(f'#define SD_NSND {len(snd)}')
 o.append('static const sd_snd_t SD_SND[SD_NSND] = {' + ', '.join(f'{{"{e}", "{p}"}}' for e, p in snd) + '};')
 o.append(f'#define SD_NLIST {len(lst)}')
 o.append('static const uint8_t SD_LIST[SD_NLIST] = {' + ', '.join(map(str, lst)) + '};')
+o.append('#define SD_HAS_TRIM 1')
+o.append('static const int8_t SD_TRIM[SD_NLIST] = {' + ', '.join(map(str, trims)) + '}, SD_TONE[SD_NLIST] = {' + ', '.join(map(str, tones)) + '};')
 o.append('static const sd_span_t SD_CUR[8][7] = {' + ', '.join('{' + ', '.join(f'{{{a}, {n}}}' for a, n in r) + '}' for r in spans) + '};')
 kl, first = [], []
 for s in STY:
