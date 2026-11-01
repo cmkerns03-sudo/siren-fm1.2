@@ -141,6 +141,17 @@ $SYN -o "$OUT/wave_test" tests/wave_test.c -lm
 mkdir -p build/wave_demo
 run "Clipper 0.2 WAVE: band-limited tables (no aliasing), building, POS, DTN / SUB, user tables, bounded, demos" "$OUT/wave_test" build/wave_demo
 SYN_UB="${CC_UB:-cc} -DCLIPPER_SYNTH=1 -O1 -g -w -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -Ibuild/gen -Ifirmware/src -Ifirmware/hal"
+# SIREN (SIREN=1): the brain in C gives the prototype's events (with Node.js), WOB, and every style through the firmware's
+# audio path (bounded, no sanitizer finding)
+SIR="$CCS -O2 -w -DSIREN=1 -Ibuild/gen -Ifirmware/src -Ifirmware/hal"
+$CCS -O2 -w -o "$OUT/siren_brain_c" tests/siren/brain_c.c
+if command -v node >/dev/null 2>&1; then
+    run "SIREN: the brain in C and the prototype's give the same events (8 styles, the hands)" sh -c 'for st in 0 1 2 3 4 5 6 7; do "$0" $st 4242 20000 0 > "$1/c.txt" && node tests/siren/brain_js.js $st 4242 20000 0 > "$1/j.txt" && cmp -s "$1/c.txt" "$1/j.txt" || exit 1; done' "$OUT/siren_brain_c" "$OUT"
+fi
+$SIR -o "$OUT/siren_wob" tests/siren/wob_test.c -lm -lpthread
+run "SIREN: WOB (each type: bounded, the pitch, the wobble heard; random patches)" "$OUT/siren_wob"
+$SIR -DNVOICE=8 -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -o "$OUT/siren_host" tests/siren/siren_host.c -lm -lpthread
+run "SIREN: every style through the firmware's audio path (sanitizers)" sh -c 'for st in 0 1 2 3 4 5 6 7; do "$0" $st S1R-3N00 20 /dev/null 3 >/dev/null || exit 1; done' "$OUT/siren_host"
 $SYN -o "$OUT/engines2_test" tests/engines2_test.c -lm
 mkdir -p build/eng2_demo
 run "Clipper 0.2 ACID (accent, sweep, slide), STRINGS (registers, ensemble), MACRO (chords, swarm, additive, speech, LPG)" "$OUT/engines2_test" build/eng2_demo

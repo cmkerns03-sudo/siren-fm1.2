@@ -203,7 +203,11 @@ def rgb565(c):
 
 
 def splash_header(path):
-    im = render("v", SPLASH_W, SPLASH_H, SPLASH_K)
+    import os
+    if os.environ.get("SIREN") == "1":            # SIREN: its own logo (tools/siren/siren-splash.png, from its SVG)
+        im = Image.open(Path(__file__).with_name("siren") / "siren-splash.png").convert("RGB").resize((SPLASH_W, SPLASH_H))
+    else:
+        im = render("v", SPLASH_W, SPLASH_H, SPLASH_K)
     # a fixed palette: black, and each logo colour at 1/3, 2/3 and full (the anti-aliased edges)
     cols = [BLACK]
     for c in (WHITE, BLUE, GREEN, YELLOW, ORANGE):

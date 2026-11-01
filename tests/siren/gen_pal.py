@@ -1,6 +1,6 @@
 # the palette the brain is told of (FM-1: SIREN's and Clipper's sounds only), for the identity test
 import json, sys
-P = '/home/claude/siren/proto/data/'
+from pathlib import Path; P = str(Path(__file__).resolve().parents[2] / 'tools' / 'siren') + '/'
 cur = json.load(open(P + 'curation.json')); kits = json.load(open(P + 'kits.json'))
 STY = ['TECHNO', 'TRANCE', 'PSY', 'ACID', 'RAVE', 'HARD', 'DNB', 'DUBSTEP']; LAY = ['DRUMS', 'BASS', 'ARP', 'HOOK', 'PAD', 'STAB', 'FX', 'SUB']
 fm1 = lambda k: '/' not in k or k.startswith('siren/')

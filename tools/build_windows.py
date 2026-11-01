@@ -21,6 +21,7 @@ def main():
     ap.add_argument('--slice', choices=['0', '1'], help='FELUCCA_SLICE for the compile (the SLICE engine); '
                     'the BREAK sample follows FELUCCA_SLICE in this process environment (tools/gen_samples.py)')
     ap.add_argument('--nvoice', choices=['8', '12', '16'], help='NVOICE for the compile (Clipper: the voices; default 8)')
+    ap.add_argument('--siren', choices=['0', '1'], help='SIREN=1: the SIREN firmware (siren.c) instead of Clipper')
     args = ap.parse_args()
     os.chdir(ROOT)
     import build
@@ -34,6 +35,8 @@ def main():
     extra = ['FELUCCA_SLICE=' + args.slice] if args.slice else []
     if args.nvoice:
         extra.append('NVOICE=' + args.nvoice)
+    if args.siren:
+        extra.append('SIREN=' + args.siren)
     subprocess.run(['wsl', '-d', args.distro, '--cd', src, '--exec', 'env',
                     'JIELI_TOOLCHAIN=' + args.toolchain, 'AC79_SDK=' + sdk, *extra,
                     'python3', '-c', code], check=True)

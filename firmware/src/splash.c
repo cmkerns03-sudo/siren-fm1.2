@@ -29,6 +29,8 @@ static void sloop_splash(void)
     char vb[24];
     if (v[0] == 'C' && v[1] == 'L' && v[7] == ' ')
         v += 8;                                         /* "CLIPPER 0.1" -> "0.1" under the wordmark */
+    if (v[0] == 'S' && v[1] == 'I' && v[5] == ' ')
+        v += 6;                                         /* (SIREN: "SIREN 0.1" -> "0.1") */
     {   /* (1.0) "1.0 EXP" -> "1.0 EXPERIMENTAL": the boot screen says it whole */
         uint32_t n = 0;
         while (v[n] && n < 12u)

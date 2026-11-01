@@ -1,5 +1,5 @@
-const B = require('/home/claude/siren/proto/js/brain.js'); const fs = require('fs');
-const kits = JSON.parse(fs.readFileSync('/home/claude/siren/proto/data/kits.json')); const pal = JSON.parse(fs.readFileSync(__dirname + '/pal.json'));
+const B = require(__dirname + '/brain.js'); const fs = require('fs');
+const kits = JSON.parse(fs.readFileSync(__dirname + '/../../tools/siren/kits.json')); const pal = JSON.parse(fs.readFileSync(__dirname + '/pal.json'));
 const STY = ['TECHNO', 'TRANCE', 'PSY', 'ACID', 'RAVE', 'HARD', 'DNB', 'DUBSTEP'], LN = ['DRUMS', 'BASS', 'ARP', 'HOOK', 'PAD', 'STAB', 'FX', 'SUB'];
 const CUR = {}; for (const s of STY) { CUR[s] = {}; for (const L of LN) CUR[s][L] = Array.from({ length: pal.n[s][L] }, (_, i) => ({ i })); }
 const [style, seed, steps, lock] = process.argv.slice(2).map(Number);
