@@ -270,9 +270,11 @@ static void drum_on(uint32_t note, uint32_t vel)
         }
         if (zid < 0)
             return;                                 /* (an empty slot, or no sound on this lane) */
+#if !SIREN                                      /* (SIREN: its own kits in SYN1, the factory ones out of the image) */
     } else if (kit >= DRUM_SAMPLED) {               /* synthesised kit */
         drum_synth_on(note, vel, kit, DS_KITS[kit - DRUM_SAMPLED].s, DS_KITS[kit - DRUM_SAMPLED].crush);
         return;
+#endif
     }
     if (zid < 0) {                                  /* the GM sample kit */
         if (si < 0)

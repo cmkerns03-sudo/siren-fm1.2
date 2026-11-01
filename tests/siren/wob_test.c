@@ -6,6 +6,8 @@
 #define main hostsim_main
 #include "../hostsim.c"
 #undef main
+#include "../../firmware/src/siren.c"         /* (a SIREN build: its hooks in the mix) */
+static void siren_load_sound(track_t *t, uint32_t e, uint32_t p) { host_preset_req(t, e, p); }
 #include <math.h>
 static int bad;
 static void check(const char *what, int ok) { printf("wob: %-90s %s\n", what, ok ? "ok" : "FAIL"); bad += !ok; }

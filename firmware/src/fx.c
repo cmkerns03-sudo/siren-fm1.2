@@ -22,7 +22,7 @@ static int16_t cho_buf[CHO_LEN] __attribute__((section(".pool")));
 #define REV_MOD 12               /* samples the modulated line moves (+-) */
 static const uint16_t REV_LINE[4] = {1559, 1931, 2389, 2791};   /* 35..63 ms, coprime */
 static const uint16_t REV_AP[2] = {556, 441};
-#if CLIPPER_SYNTH                /* (1.0) in the pool, which has room in the synth (48 KB free): .lowram put line 0, the
+#if CLIPPER_SYNTH && !SIREN      /* (1.0) in the pool, which has room in the synth (48 KB free): .lowram put line 0, the
                                   * left channel's own, right above the second core's stacks */
 static int16_t rev_line[1559 + 1931 + 2389 + 2791 + REV_MOD + 2] __attribute__((section(".pool")));
 #else
@@ -1483,7 +1483,7 @@ static void mix_block(int32_t *out, uint32_t n)
     duck_block(n * (uint32_t)song.g[G_BPM]);
     for (i = 0; i < NPART; i++)
         mix_part(&trk[i], n);
-#if !CLIPPER_SYNTH || BOARD_SMK37                                  /* (Clipper 1.2: no drum machine: nothing to render; its sounds are
+#if !CLIPPER_SYNTH || BOARD_SMK37 || SIREN                         /* (Clipper 1.2: no drum machine: nothing to render; its sounds are
                                                      * out of the image) */
     drums.a0 = TDRUM->att;                              /* the drum track's mute / solo fade */
     drums.a1 = 32767 - gain_next(TDRUM);
