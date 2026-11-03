@@ -44,7 +44,7 @@ static struct {
     volatile uint32_t kicks, notes_n; uint8_t notes_l[16], notes_k[16];
     int16_t scope[512]; uint32_t sw;
     /* the commands from the main loop (siren_cmd) */
-    volatile uint32_t cw, cr; struct { uint8_t op; int16_t a, b; uint32_t c; } cmd[16];
+    volatile uint32_t cw, cr; struct { uint8_t op; int16_t a, b; uint32_t c; } cmd[32];   /* (0.8: 32, a chord's keys) */
     /* the sounds as applied (main loop): the selection index per layer, the kit (-1: none yet), and the style
      * they were picked in; the brain's own, as it last asked */
     int16_t applied[7], applied_style[7];
@@ -74,18 +74,23 @@ static struct {
      * most three at once, by the section's priorities); a drum fill asked for, playing; the next track on the phrase */
     uint32_t last_note[7]; uint8_t allowed, focus, fill_req, fill_on, q_next;
     int16_t bcut[7];                             /* the brain's own filter for each layer, as it last wrote it */
+    /* (0.8) the keyboard in the hands (HOME): the layers taken (bits: SIREN's own notes for them left out until they are
+     * given back), the keys held (layer, note), the arpeggiator on them (each sixteenth the next, upwards), its place;
+     * a note played from the hands (siren_play: past the mutes, the arrangement and the taken layers) */
+    uint8_t live, larp, nlh, lplay; uint32_t larp_i; struct { uint8_t L, n; } lh[16];
 } sr;
 enum { SC_PLAY, SC_STOP, SC_KNOB, SC_DIVE, SC_BREAK, SC_STYLE, SC_SEED, SC_REROLL, SC_LOCK, SC_STYLELOCK, SC_PUNCH, SC_STYLEQ,
-       SC_DROP, SC_FILL, SC_REMOTIF, SC_KEYUP, SC_NEXT, SC_STAY, SC_SOUND, SC_MIX };   /* (0.5) the black keys, the mixer */
+       SC_DROP, SC_FILL, SC_REMOTIF, SC_KEYUP, SC_NEXT, SC_STAY, SC_SOUND, SC_MIX,     /* (0.5) the black keys, the mixer */
+       SC_LIVE, SC_LIVEOFF, SC_LARP };   /* (0.8) the keyboard: a key (its notes), the layers given back, the arpeggiator */
 enum { SM_FILT, SM_SPACE, SM_FOCUS, SM_LVOL = 10, SM_LFLT = 20, SM_LSPACE = 30 };  /* SC_MIX's targets (+ the layer) */
 
 /* the main loop's way into the brain */
 static void siren_cmd(uint32_t op, int32_t a, int32_t b, uint32_t c)
 {
     uint32_t w = sr.cw;
-    if (w - sr.cr >= 16u)
+    if (w - sr.cr >= 32u)
         return;                                  /* (full: the hand was too fast, drop it) */
-    sr.cmd[w % 16u].op = (uint8_t)op; sr.cmd[w % 16u].a = (int16_t)a; sr.cmd[w % 16u].b = (int16_t)b; sr.cmd[w % 16u].c = c;
+    sr.cmd[w % 32u].op = (uint8_t)op; sr.cmd[w % 32u].a = (int16_t)a; sr.cmd[w % 32u].b = (int16_t)b; sr.cmd[w % 32u].c = c;
     RING_PUBLISH();
     sr.cw = w + 1u;
 }
@@ -282,10 +287,71 @@ static void siren_mix_set(int32_t what, int32_t v)
     else if (what >= SM_LSPACE && what < SM_LSPACE + 7) sr.lspace[what - SM_LSPACE] = (uint16_t)sb_clamp(v, 0, 200);
 }
 
+/* ---- (0.8) the keyboard in the hands: a key's notes (up to three, each + 1 in a byte of c) on a layer, vel 0 its end.
+ * The first note on a layer takes it: SIREN's own notes for it stop (their ends dropped, the bass's sub and wobble
+ * with it) until it is given back (SC_LIVEOFF). The drums are not taken: the hits go on top of the groove. With the
+ * arpeggiator on and the set playing, the keys held are played one at a time, a sixteenth each (siren_fire). */
+static void siren_spark(uint32_t L, uint32_t n) { uint32_t q = sr.notes_n % 16u; sr.notes_l[q] = (uint8_t)L; sr.notes_k[q] = (uint8_t)n; sr.notes_n++; }
+static void siren_take(uint32_t L)
+{
+    uint32_t i;
+    sr.live |= (uint8_t)(1u << L);
+    trk_all_off1(SIREN_PART(L));
+    for (i = 0; i < sr.noff;)                            /* (SIREN's ends for it: gone, they would cut the hand's) */
+        if (sr.off[i].trk == L - 1u) sr.off[i] = sr.off[--sr.noff]; else i++;
+    if (L == L_BASS) { sr.sgate = 0; sr.won = 0; }
+}
+static void siren_live(uint32_t L, uint32_t vel, uint32_t c)
+{
+    uint32_t k, i;
+    if (L > L_FX)
+        return;
+    for (k = 0; k < 3u; k++, c >>= 8) {
+        uint32_t n = (c & 0xFFu);
+        if (!n--)
+            continue;
+        if (L == L_DRUMS) {
+            if (vel) { trk_note_on1(TDRUM, n, vel); if (n == 36u) sr.kicks++; siren_spark(L, n); }
+            continue;
+        }
+        if (vel) {
+            if (!((sr.live >> L) & 1u)) siren_take(L);
+            for (i = 0; i < sr.nlh && !(sr.lh[i].L == L && sr.lh[i].n == n); i++) {}
+            if (i == sr.nlh && sr.nlh < 16u) { sr.lh[i].L = (uint8_t)L; sr.lh[i].n = (uint8_t)n; sr.nlh++; }
+            if (!(sr.larp && sr.playing)) { trk_note_on1(SIREN_PART(L), n, vel); siren_spark(L, n); }
+        } else {
+            for (i = 0; i < sr.nlh; i++)
+                if (sr.lh[i].L == L && sr.lh[i].n == n) { sr.lh[i] = sr.lh[--sr.nlh]; break; }
+            trk_note_off1(SIREN_PART(L), n);
+        }
+    }
+}
+static void siren_live_off(uint32_t mask)                /* the layers given back to SIREN */
+{
+    uint32_t i, L;
+    for (i = 0; i < sr.nlh;)
+        if ((mask >> sr.lh[i].L) & 1u) sr.lh[i] = sr.lh[--sr.nlh]; else i++;
+    for (L = L_BASS; L <= L_FX; L++)
+        if ((mask >> L) & (sr.live >> L) & 1u) trk_all_off1(SIREN_PART(L));
+    sr.live &= (uint8_t)~mask;
+}
+static void siren_larp(uint32_t on)                      /* the arpeggiator: the keys held go over to it, or back */
+{
+    uint32_t i;
+    if (sr.larp == (uint8_t)!!on)
+        return;
+    sr.larp = (uint8_t)!!on; sr.larp_i = 0;
+    for (i = 0; i < sr.nlh; i++) {
+        track_t *t = SIREN_PART(sr.lh[i].L);
+        if (on) trk_note_off1(t, sr.lh[i].n);
+        else trk_note_on1(t, sr.lh[i].n, 100);
+    }
+}
+
 static void siren_commands(void)                 /* (audio interrupt) */
 {
     while (sr.cr != sr.cw) {
-        uint32_t i = sr.cr % 16u;
+        uint32_t i = sr.cr % 32u;
         int32_t a = sr.cmd[i].a, b = sr.cmd[i].b;
         switch (sr.cmd[i].op) {
         case SC_PLAY: if (!sr.playing) { sr.playing = 1; sr.until = 0; } break;
@@ -308,6 +374,9 @@ static void siren_commands(void)                 /* (audio interrupt) */
         case SC_STAY: sb.stay = (uint8_t)!sb.stay; break;
         case SC_SOUND: siren_sound_step(a, b); break;
         case SC_MIX: siren_mix_set(a, b); break;
+        case SC_LIVE: siren_live((uint32_t)a, (uint32_t)b, sr.cmd[i].c); break;
+        case SC_LIVEOFF: siren_live_off((uint32_t)a); break;
+        case SC_LARP: siren_larp((uint32_t)a); break;
         }
         sr.cr++;
     }
@@ -334,8 +403,9 @@ static void siren_wobble(uint32_t adv)
 static void siren_play(const sb_note_t *x, int tr, uint32_t len)
 {
     uint32_t n = (uint32_t)sb_clamp((int)x->note + (x->layer == L_DRUMS ? 0 : tr), 0, 127), tk = 0xFFu, k;
-    if (sr.mute[x->layer] || (x->layer >= L_ARP && x->layer <= L_FX && !((sr.allowed >> x->layer) & 1u)))
-        return;                                  /* (0.5: a melodic layer over the three the section affords) */
+    if (!sr.lplay && (sr.mute[x->layer] || (x->layer >= L_ARP && x->layer <= L_FX && !((sr.allowed >> x->layer) & 1u)) ||
+                      ((sr.live >> x->layer) & 1u) || (x->layer == L_SUB && ((sr.live >> L_BASS) & 1u))))
+        return;                                  /* (0.5: a melodic layer over the three the section affords; 0.8: in the hands) */
     if (x->layer == L_DRUMS) {
         trk_note_on1(TDRUM, x->note, x->vel);
         if (x->note == 36u) sr.kicks++;
@@ -429,7 +499,9 @@ static int siren_wrote(uint32_t L, uint32_t now) { return sr.last_note[L] && now
 static void siren_arrange(uint32_t sec, uint32_t now)
 {
     uint32_t k, n = 0, a = 0, gone, L;
-    if (sr.focus >= L_ARP && sr.focus <= L_FX && !sr.mute[sr.focus]) { a = 1u << sr.focus; n = 1; }
+    for (L = L_ARP; L <= L_FX; L++)                  /* (0.8) the layers in the hands first, then the one chosen */
+        if ((sr.live >> L) & 1u) { a |= 1u << L; n++; }
+    if (sr.focus >= L_ARP && sr.focus <= L_FX && !sr.mute[sr.focus] && !((a >> sr.focus) & 1u)) { a |= 1u << sr.focus; n++; }
     for (k = 0; k < 5u && n < 3u; k++) {
         L = SIREN_PRI[sec % 7u][k];
         if (((a >> L) & 1u) || sr.mute[L] || !siren_wrote(L, now))
@@ -551,12 +623,23 @@ static void siren_fire(void)
             if (!siren_held_back(&x)) siren_play(&x, 0, 0);
         }
     }
+    if (sr.larp && sr.nlh) {                         /* (0.8) the arpeggiator on the keys held: upwards, a sixteenth each */
+        uint32_t j, k = sr.larp_i++ % sr.nlh, best = 0;
+        sb_note_t x;
+        for (i = 0; i < sr.nlh; i++) {                   /* (the k-th lowest; the same note on two layers: by its place) */
+            uint32_t below = 0, v = sr.lh[i].n * 16u + i;
+            for (j = 0; j < sr.nlh; j++) below += sr.lh[j].n * 16u + j < v;
+            if (below == k) best = i;
+        }
+        x.layer = sr.lh[best].L; x.note = sr.lh[best].n; x.vel = 100; x.len = 1;
+        sr.lplay = 1; siren_play(&x, 0, u16 / 100u * 80u); sr.lplay = 0;
+    }
     if (sr.r_on) {
         siren_replay((s - sr.r_d0) % sr.r_len, sr.r_len, u16);
         if (sr.r_32) sr.r_half = (int32_t)(u16 / 2u);
     }
     if (sr.px != SPX_NONE) sr.px_n16++;
-    if (ev->has_wob && !sr.mute[L_BASS]) {
+    if (ev->has_wob && !sr.mute[L_BASS] && !((sr.live >> L_BASS) & 1u)) {
         sr.won = 1; sr.wph = 0; sr.wshape = ev->wob.shape; sr.wdepth = ev->wob.depth;
         sr.winc = 19478u * 1000u / (uint32_t)(ev->wob.rate3 ? ev->wob.rate3 : 12) / 1000u;   /* 3 x 2^32 / (rate3 x a sixteenth's units) */
     }

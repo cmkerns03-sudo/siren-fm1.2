@@ -163,6 +163,9 @@ run "SIREN 0.5: every sound at its layer's loudness (within 2 dB), its hard high
 $SIR -DNVOICE=8 -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -o "$OUT/siren_screen" tests/siren/screen_test.c -lm -lpthread
 mkdir -p build/siren_screen
 run "SIREN 0.3: the deck screen drawn through a set (only what changes sent; sanitizers)" "$OUT/siren_screen" 7 S1R-3N07 build/siren_screen
+$SIR -DNVOICE=8 -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -o "$OUT/siren_pages" tests/siren/pages_test.c -lm -lpthread
+mkdir -p build/siren_pages
+run "SIREN 0.8: the pages (no button to hold) and the keyboard in the hands (the layer taken, given back; chords, octave, arpeggiator; sanitizers)" "$OUT/siren_pages" build/siren_pages
 $SYN -o "$OUT/engines2_test" tests/engines2_test.c -lm
 mkdir -p build/eng2_demo
 run "Clipper 0.2 ACID (accent, sweep, slide), STRINGS (registers, ensemble), MACRO (chords, swarm, additive, speech, LPG)" "$OUT/engines2_test" build/eng2_demo
