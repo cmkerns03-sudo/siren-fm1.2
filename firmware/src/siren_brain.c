@@ -54,18 +54,6 @@ const char *const SB_SEC_NAMES[7] = { "INTRO", "GROOVE", "BUILD", "DROP", "BREAK
 static const int16_t SB_SEC_E[7] = { 250, 550, 750, 1000, 300, 920, 320 };
 static const uint8_t SB_STYLE_ORDER[SB_NSTYLES] = { SB_HOUSE, SB_TECHNO, SB_ACID, SB_TRANCE, SB_PSY, SB_HARD, SB_RAVE, SB_DNB };
 
-typedef struct { uint8_t sec, a, b; } sb_shp_t;
-typedef struct { const sb_shp_t *s; uint8_t n; } sb_shape_t;
-#define SB_SHAPE(a) { a, sizeof(a) / sizeof((a)[0]) }
-static const sb_shp_t SB_SH0[] = { {SEC_INTRO, 1, 2}, {SEC_GROOVE, 2, 4}, {SEC_BUILD, 1, 1}, {SEC_DROP, 3, 4}, {SEC_BREAK, 1, 2}, {SEC_BUILD, 1, 1}, {SEC_DROP, 3, 5}, {SEC_PEAK, 1, 2}, {SEC_GROOVE, 1, 2}, {SEC_OUTRO, 1, 2} };
-static const sb_shp_t SB_SH1[] = { {SEC_INTRO, 1, 2}, {SEC_GROOVE, 3, 5}, {SEC_BUILD, 1, 1}, {SEC_DROP, 4, 6}, {SEC_GROOVE, 1, 2}, {SEC_OUTRO, 1, 2} };
-static const sb_shp_t SB_SH2[] = { {SEC_INTRO, 1, 1}, {SEC_BUILD, 1, 1}, {SEC_DROP, 2, 3}, {SEC_BREAK, 1, 1}, {SEC_BUILD, 1, 1}, {SEC_DROP, 2, 3}, {SEC_BREAK, 1, 1}, {SEC_BUILD, 1, 1}, {SEC_PEAK, 2, 3}, {SEC_OUTRO, 1, 1} };
-static const sb_shp_t SB_SH_TECHNO[] = { {SEC_INTRO, 2, 2}, {SEC_GROOVE, 4, 6}, {SEC_BREAK, 1, 1}, {SEC_GROOVE, 2, 3}, {SEC_PEAK, 2, 4}, {SEC_GROOVE, 1, 2}, {SEC_OUTRO, 1, 2} };
-static const sb_shp_t SB_SH_TRANCE[] = { {SEC_INTRO, 2, 2}, {SEC_GROOVE, 2, 3}, {SEC_BUILD, 1, 1}, {SEC_DROP, 3, 4}, {SEC_BREAK, 2, 3}, {SEC_BUILD, 1, 2}, {SEC_PEAK, 4, 5}, {SEC_OUTRO, 1, 2} };
-static const sb_shp_t SB_SH_PSY[] = { {SEC_INTRO, 1, 1}, {SEC_GROOVE, 4, 6}, {SEC_BUILD, 1, 1}, {SEC_DROP, 4, 6}, {SEC_BREAK, 1, 1}, {SEC_DROP, 2, 3}, {SEC_OUTRO, 1, 1} };
-static const sb_shp_t SB_SH_ACID[] = { {SEC_INTRO, 1, 2}, {SEC_GROOVE, 4, 6}, {SEC_BREAK, 1, 1}, {SEC_BUILD, 1, 1}, {SEC_DROP, 4, 6}, {SEC_OUTRO, 1, 2} };
-static const sb_shp_t SB_SH_DNB[] = { {SEC_INTRO, 2, 2}, {SEC_BUILD, 1, 1}, {SEC_DROP, 4, 5}, {SEC_BREAK, 1, 2}, {SEC_BUILD, 1, 1}, {SEC_DROP, 4, 5}, {SEC_OUTRO, 1, 2} };
-static const sb_shp_t SB_SH_HOUSE[] = { {SEC_INTRO, 2, 2}, {SEC_GROOVE, 3, 4}, {SEC_BREAK, 1, 2}, {SEC_BUILD, 1, 1}, {SEC_DROP, 4, 5}, {SEC_GROOVE, 1, 2}, {SEC_OUTRO, 1, 2} };
 
 typedef struct { uint8_t n, c[4]; } sb_prog_t;
 typedef struct {
@@ -73,34 +61,87 @@ typedef struct {
     uint8_t bpm_lo, bpm_hi; uint8_t nscales, scales[3];
     uint8_t nprogs; sb_prog_t progs[5]; uint8_t chord_bars;
     uint8_t nbass, bass[4]; uint8_t swing; uint16_t layers[6]; uint8_t hats_lo, hats_hi; uint16_t ride; uint8_t roll;
-    uint8_t nperc, perc[4]; uint8_t nhm, hm[3]; uint8_t nshapes; sb_shape_t shapes[3];
+    uint8_t nperc, perc[4]; uint8_t nhm, hm[3];
 } sb_style_t;
 static const sb_style_t SB_STY[SB_NSTYLES] = {
     /* TECHNO */ { 1, GR_FOUR, 550, 1, 0, 0, 0, 126, 132, 3, {SB_MINOR, SB_PHRYGIAN, SB_DORIAN}, 4, {{1, {0}}, {4, {0, 0, 0, 5}}, {2, {0, 3}}, {4, {0, 0, 6, 0}}}, 4,
-                 3, {SBBK_RUMBLE, SBBK_OFFBEAT, SBBK_PULSE}, 40, {350, 450, 450, 550, 1000, 0}, 5, 11, 600, SBD_SNARE, 4, {SBD_RIM, SBD_CONGA, SBD_TOML, SBD_RIM}, 3, {SBHM_16, SBHM_OFF8, SBHM_16GAP},
-                 3, {SB_SHAPE(SB_SH1), SB_SHAPE(SB_SH_TECHNO), SB_SHAPE(SB_SH0)} },
+                 3, {SBBK_RUMBLE, SBBK_OFFBEAT, SBBK_PULSE}, 40, {350, 450, 450, 550, 1000, 0}, 5, 11, 600, SBD_SNARE, 4, {SBD_RIM, SBD_CONGA, SBD_TOML, SBD_RIM}, 3, {SBHM_16, SBHM_OFF8, SBHM_16GAP} },
     /* TRANCE */ { 0, GR_FOUR, 0, 1, 0, 0, 0, 136, 140, 2, {SB_MINOR, SB_HARMONIC}, 5, {{4, {0, 5, 2, 6}}, {4, {0, 6, 5, 4}}, {4, {0, 3, 5, 4}}, {4, {5, 3, 0, 4}}, {4, {0, 5, 3, 4}}}, 2,
-                 3, {SBBK_OFFBEAT, SBBK_OFFBEAT, SBBK_ROLLING}, 0, {950, 850, 950, 200, 1000, 0}, 4, 8, 800, SBD_SNARE, 2, {SBD_SHAKE, SBD_RIM}, 2, {SBHM_16, SBHM_16GAP},
-                 2, {SB_SHAPE(SB_SH0), SB_SHAPE(SB_SH_TRANCE)} },
+                 3, {SBBK_OFFBEAT, SBBK_OFFBEAT, SBBK_ROLLING}, 0, {950, 850, 950, 200, 1000, 0}, 4, 8, 800, SBD_SNARE, 2, {SBD_SHAKE, SBD_RIM}, 2, {SBHM_16, SBHM_16GAP} },
     /* PSY */    { 1, GR_FOUR, 0, 1, 0, 0, 0, 142, 146, 2, {SB_PHRYGIAN, SB_HARMONIC}, 3, {{1, {0}}, {2, {0, 1}}, {4, {0, 0, 0, 1}}}, 8,
-                 1, {SBBK_ROLLING}, 0, {600, 700, 350, 100, 1000, 0}, 6, 10, 300, SBD_SNARE, 3, {SBD_SHAKE, SBD_CONGA, SBD_RIM}, 2, {SBHM_16, SBHM_16},
-                 3, {SB_SHAPE(SB_SH1), SB_SHAPE(SB_SH2), SB_SHAPE(SB_SH_PSY)} },
+                 1, {SBBK_ROLLING}, 0, {600, 700, 350, 100, 1000, 0}, 6, 10, 300, SBD_SNARE, 3, {SBD_SHAKE, SBD_CONGA, SBD_RIM}, 2, {SBHM_16, SBHM_16} },
     /* ACID */   { 1, GR_FOUR, 150, 0, 0, 0, 0, 128, 134, 2, {SB_MINOR, SB_PHRYGIAN}, 2, {{1, {0}}, {4, {0, 0, 5, 0}}}, 8,
-                 1, {SBBK_ACID}, 80, {200, 500, 300, 300, 1000, 0}, 6, 12, 500, SBD_CLAP, 3, {SBD_BELL, SBD_RIM, SBD_CLAVE}, 2, {SBHM_16, SBHM_16GAP},
-                 2, {SB_SHAPE(SB_SH1), SB_SHAPE(SB_SH_ACID)} },
+                 1, {SBBK_ACID}, 80, {200, 500, 300, 300, 1000, 0}, 6, 12, 500, SBD_CLAP, 3, {SBD_BELL, SBD_RIM, SBD_CLAVE}, 2, {SBHM_16, SBHM_16GAP} },
     /* RAVE */   { 0, GR_BREAKS, 0, 0, 0, 0, 0, 140, 150, 2, {SB_MINOR, SB_HARMONIC}, 3, {{4, {0, 5, 6, 4}}, {4, {0, 3, 6, 5}}, {4, {0, 6, 5, 6}}}, 2,
-                 2, {SBBK_REESE, SBBK_OFFBEAT}, 0, {400, 600, 600, 950, 1000, 600}, 6, 12, 400, SBD_SNARE, 2, {SBD_RIM, SBD_SHAKE}, 2, {SBHM_8, SBHM_16GAP},
-                 3, {SB_SHAPE(SB_SH0), SB_SHAPE(SB_SH1), SB_SHAPE(SB_SH2)} },
+                 2, {SBBK_REESE, SBBK_OFFBEAT}, 0, {400, 600, 600, 950, 1000, 600}, 6, 12, 400, SBD_SNARE, 2, {SBD_RIM, SBD_SHAKE}, 2, {SBHM_8, SBHM_16GAP} },
     /* HARD */   { 1, GR_FOUR, 350, 1, 0, 0, 500, 150, 165, 2, {SB_HARMONIC, SB_PHRYGIAN}, 3, {{4, {0, 5, 6, 4}}, {2, {0, 1}}, {4, {0, 6, 5, 4}}}, 2,
-                 2, {SBBK_OFFBEAT, SBBK_PULSE}, 0, {500, 850, 400, 500, 1000, 0}, 6, 12, 600, SBD_SNARE, 2, {SBD_RIM, SBD_TOML}, 2, {SBHM_16, SBHM_16GAP},
-                 3, {SB_SHAPE(SB_SH0), SB_SHAPE(SB_SH1), SB_SHAPE(SB_SH2)} },
+                 2, {SBBK_OFFBEAT, SBBK_PULSE}, 0, {500, 850, 400, 500, 1000, 0}, 6, 12, 600, SBD_SNARE, 2, {SBD_RIM, SBD_TOML}, 2, {SBHM_16, SBHM_16GAP} },
     /* DNB */    { 0, GR_DNB, 0, 1, 850, 0, 0, 170, 176, 2, {SB_MINOR, SB_DORIAN}, 4, {{4, {0, 5, 3, 4}}, {2, {0, 3}}, {4, {0, 6, 5, 4}}, {4, {0, 0, 5, 6}}}, 2,
-                 3, {SBBK_ROLLER, SBBK_REESE, SBBK_ROLLER}, 0, {500, 500, 900, 450, 1000, 0}, 6, 10, 700, SBD_SNARE, 2, {SBD_RIM, SBD_SHAKE}, 2, {SBHM_8, SBHM_16GAP},
-                 2, {SB_SHAPE(SB_SH_DNB), SB_SHAPE(SB_SH0)} },
+                 3, {SBBK_ROLLER, SBBK_REESE, SBBK_ROLLER}, 0, {500, 500, 900, 450, 1000, 0}, 6, 10, 700, SBD_SNARE, 2, {SBD_RIM, SBD_SHAKE}, 2, {SBHM_8, SBHM_16GAP} },
     /* HOUSE */  { 0, GR_FOUR, 0, 1, 0, 0, 0, 122, 126, 2, {SB_MINOR, SB_DORIAN}, 4, {{2, {0, 3}}, {4, {0, 5, 2, 6}}, {4, {0, 3, 6, 4}}, {4, {0, 0, 3, 3}}}, 2,
-                 3, {SBBK_OFFBEAT, SBBK_PULSE, SBBK_OFFBEAT}, 70, {350, 800, 800, 950, 900, 0}, 4, 9, 500, SBD_CLAP, 3, {SBD_SHAKE, SBD_CONGA, SBD_CLAVE}, 3, {SBHM_OFF8, SBHM_16, SBHM_16GAP},
-                 3, {SB_SHAPE(SB_SH1), SB_SHAPE(SB_SH_HOUSE), SB_SHAPE(SB_SH0)} },
+                 3, {SBBK_OFFBEAT, SBBK_PULSE, SBBK_OFFBEAT}, 70, {350, 800, 800, 950, 900, 0}, 4, 9, 500, SBD_CLAP, 3, {SBD_SHAKE, SBD_CONGA, SBD_CLAVE}, 3, {SBHM_OFF8, SBHM_16, SBHM_16GAP} },
 };
+/* (0.6) the form of a track, generated: an intro (in two parts, now and then), then one to four waves, each a groove,
+ * a breakdown (short before the first drop, longer after), a build (now and then a false one: build, a breath, build
+ * again; or a bar of silence before the drop), the drop or the peak and a ride after it; then the outro. Each style
+ * its proportions (from how its records are made: house's 32-bar intros and long grooves, techno's rides and few
+ * builds, trance's long breakdowns, drum & bass's two drops, hard techno's short intros and frequent drops). Lengths
+ * in bars; chances per mille. The next track never takes the same order of sections as the one before. */
+typedef struct { uint8_t n, v[4]; } sb_opt_t;
+typedef struct {
+    sb_opt_t intro, intro2, groove1, midg, brks, brkl, build, drop, tail, outro;
+    uint16_t p_intro2, p_groove1, p_mid, p_break1, p_build, p_fake, p_pause, p_peak, p_peaklast, p_tail;
+    uint8_t cyc_lo, cyc_hi; uint16_t max_bars;   /* (about six minutes at the style's tempo) */
+} sb_form_t;
+static const sb_form_t SB_FORM[SB_NSTYLES] = {
+    /* TECHNO */ { {2, {16, 32}}, {2, {16, 32}}, {3, {16, 32, 32}}, {2, {16, 32}}, {1, {8}}, {2, {8, 16}}, {1, {8}}, {3, {16, 32, 32}}, {2, {16, 32}}, {2, {16, 32}},
+                   300, 900, 700, 400, 350, 0, 100, 500, 500, 600, 2, 3, 200 },
+    /* TRANCE */ { {2, {16, 32}}, {1, {16}}, {1, {16}}, {2, {8, 16}}, {2, {8, 16}}, {3, {16, 32, 32}}, {3, {8, 16, 16}}, {2, {16, 32}}, {2, {8, 16}}, {2, {16, 32}},
+                   600, 700, 200, 500, 1000, 150, 250, 100, 800, 300, 2, 3, 208 },
+    /* PSY */    { {1, {16}}, {2, {16, 32}}, {2, {32, 48}}, {2, {16, 32}}, {1, {8}}, {2, {8, 16}}, {1, {8}}, {2, {32, 48}}, {2, {16, 32}}, {2, {8, 16}},
+                   300, 900, 600, 200, 700, 100, 200, 200, 400, 400, 2, 4, 216 },
+    /* ACID */   { {2, {8, 16}}, {2, {16, 32}}, {2, {32, 48}}, {2, {16, 32}}, {1, {8}}, {2, {8, 16}}, {1, {8}}, {2, {32, 48}}, {2, {16, 32}}, {2, {8, 16}},
+                   400, 1000, 700, 500, 600, 50, 100, 200, 300, 500, 1, 3, 200 },
+    /* RAVE */   { {2, {8, 16}}, {2, {8, 16}}, {1, {16}}, {2, {8, 16}}, {1, {8}}, {2, {8, 16}}, {2, {8, 16}}, {2, {16, 32}}, {2, {8, 16}}, {2, {8, 16}},
+                   300, 600, 400, 500, 900, 200, 300, 200, 600, 300, 2, 3, 200 },
+    /* HARD */   { {2, {8, 16}}, {1, {8}}, {1, {16}}, {1, {8}}, {1, {8}}, {2, {8, 16}}, {2, {4, 8}}, {3, {16, 24, 32}}, {1, {8}}, {1, {8}},
+                   200, 500, 300, 600, 900, 250, 350, 200, 600, 200, 2, 4, 224 },
+    /* DNB */    { {3, {16, 32, 32}}, {1, {16}}, {1, {8}}, {1, {8}}, {1, {8}}, {3, {16, 24, 32}}, {2, {8, 16}}, {3, {32, 32, 48}}, {1, {8}}, {2, {16, 32}},
+                   300, 200, 100, 300, 1000, 150, 300, 100, 400, 200, 2, 3, 256 },
+    /* HOUSE */  { {3, {16, 32, 32}}, {2, {16, 32}}, {3, {32, 48, 64}}, {2, {16, 32}}, {1, {8}}, {2, {8, 16}}, {1, {8}}, {3, {32, 32, 48}}, {2, {16, 32}}, {2, {16, 32}},
+                   600, 900, 700, 700, 700, 100, 200, 200, 300, 600, 1, 3, 192 },
+};
+static int sb_opt(sb_rng_t *r, const sb_opt_t *o) { return o->v[sb_ri(r, o->n)]; }
+static void sb_sec(sb_brain_t *b, int sec, int len)
+{
+    if (b->plan_n && b->plan_sec[b->plan_n - 1] == sec) { b->plan_len[b->plan_n - 1] = (uint16_t)(b->plan_len[b->plan_n - 1] + len); return; }   /* (one longer) */
+    if (b->plan_n >= SB_PLAN_MAX) return;
+    b->plan_sec[b->plan_n] = (uint8_t)sec; b->plan_len[b->plan_n] = (uint16_t)len; b->plan_n++;
+}
+static void sb_form(sb_brain_t *b, sb_rng_t *r)
+{
+    const sb_form_t *f = &SB_FORM[b->style];
+    int c, ncyc, sec, len;
+    b->plan_n = 0;
+    sb_sec(b, SEC_INTRO, sb_opt(r, &f->intro));
+    if (sb_rchance(r, f->p_intro2)) sb_sec(b, SEC_GROOVE, sb_opt(r, &f->intro2));
+    ncyc = f->cyc_lo + (int)sb_ri(r, (uint32_t)(f->cyc_hi - f->cyc_lo + 1));
+    for (c = 0; c < ncyc; c++) {
+        int last = c == ncyc - 1;
+        if (sb_rchance(r, c ? f->p_mid : f->p_groove1)) sb_sec(b, SEC_GROOVE, sb_opt(r, c ? &f->midg : &f->groove1));
+        if (c || sb_rchance(r, f->p_break1)) sb_sec(b, SEC_BREAK, sb_opt(r, c ? &f->brkl : &f->brks));
+        if (sb_rchance(r, f->p_build)) {
+            sb_sec(b, SEC_BUILD, sb_opt(r, &f->build));
+            if (sb_rchance(r, f->p_fake)) { len = 4 * (1 + (int)sb_ri(r, 2)); sb_sec(b, SEC_BREAK, len); sb_sec(b, SEC_BUILD, sb_opt(r, &f->build)); }
+            if (sb_rchance(r, f->p_pause)) sb_sec(b, SEC_BREAK, 1);
+        }
+        sec = sb_rchance(r, last ? f->p_peaklast : f->p_peak) ? SEC_PEAK : SEC_DROP;
+        sb_sec(b, sec, sb_opt(r, &f->drop));
+        if (!last && sb_rchance(r, f->p_tail)) sb_sec(b, SEC_GROOVE, sb_opt(r, &f->tail));
+    }
+    if (sb_rchance(r, f->p_tail)) sb_sec(b, SEC_GROOVE, sb_opt(r, &f->tail));
+    sb_sec(b, SEC_OUTRO, sb_opt(r, &f->outro));
+}
 static int sb_euclid(int k, int n, int rot, int i) { return (((i + n - (rot % n)) * k) % n) < k; }
 static int sb_has(const uint8_t *a, int n, int x) { int i; for (i = 0; i < n; i++) if (a[i] == x) return 1; return 0; }
 
@@ -114,7 +155,7 @@ static void sb_new_track(sb_brain_t *b, uint32_t seed, int style, int has_prev, 
     const sb_style_t *st = &SB_STY[style];
     static const uint8_t KEYSTEP[6] = {0, 0, 7, 5, 3, 9};
     sb_rng_t r = sb_rng(sb_hash(seed, 1));
-    const sb_shape_t *sh; int i;
+    int i;
     b->seed = seed; b->style = (uint8_t)style;
     b->scale = st->scales[sb_rnext(&r) % st->nscales];
     b->key = has_prev ? (uint8_t)((prev_key + SB_PICK(&r, KEYSTEP)) % 12) : (uint8_t)sb_ri(&r, 12);
@@ -125,9 +166,30 @@ static void sb_new_track(sb_brain_t *b, uint32_t seed, int style, int has_prev, 
     b->chord_bars = st->chord_bars;
     b->kit_pick = sb_rnext(&r); b->swing = st->swing;
     b->bass_kind = st->bass[sb_rnext(&r) % st->nbass];
-    sh = &st->shapes[sb_rnext(&r) % st->nshapes];
-    for (i = 0; i < sh->n; i++) { b->plan_sec[i] = sh->s[i].sec; b->plan_len[i] = (uint16_t)((sh->s[i].a + sb_ri(&r, (uint32_t)(sh->s[i].b - sh->s[i].a + 1))) * 8); }
-    b->plan_n = sh->n; b->plan_at = 0; b->sec_bar = 0; b->phrase_bar = 0;
+    {   /* (0.6) the form, from its own stream; never the order of sections the last track had */
+        sb_rng_t pr = sb_rng(sb_hash(seed, 7));
+        uint8_t was[SB_PLAN_MAX], wn = has_prev ? b->plan_n : 0;
+        int t;
+        for (i = 0; i < wn; i++) was[i] = b->plan_sec[i];
+        for (t = 0; t < 5; t++) {
+            int same;
+            sb_form(b, &pr);
+            same = has_prev && b->plan_n == wn;
+            for (i = 0; same && i < wn; i++) if (was[i] != b->plan_sec[i]) same = 0;
+            if (!same) break;
+        }
+        {   /* too long for the style: the longest of its long sections 8 bars shorter, until it fits */
+            int bars = 0, k;
+            for (i = 0; i < b->plan_n; i++) bars += b->plan_len[i];
+            while (bars > SB_FORM[style].max_bars) {
+                for (k = -1, i = 0; i < b->plan_n; i++)
+                    if (b->plan_sec[i] != SEC_BUILD && b->plan_sec[i] != SEC_BREAK && b->plan_len[i] > 16 && (k < 0 || b->plan_len[i] > b->plan_len[k])) k = i;
+                if (k < 0) break;
+                b->plan_len[k] = (uint16_t)(b->plan_len[k] - 8); bars -= 8;
+            }
+        }
+    }
+    b->plan_at = 0; b->sec_bar = 0; b->phrase_bar = 0;
     for (i = 0; i < 6; i++) b->layer_on[i] = (uint8_t)sb_rchance(&r, st->layers[i]);
     if (!b->layer_on[1] && !b->layer_on[0]) b->layer_on[1] = 1;   /* (a track always sings something) */
     sb_motifs(b); sb_pick_sounds(b);

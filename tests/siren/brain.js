@@ -29,34 +29,59 @@
 
   // ------------------------------------------------------------------------------------------- the music ---
   const SCALES = { minor: [0, 2, 3, 5, 7, 8, 10], dorian: [0, 2, 3, 5, 7, 9, 10], phrygian: [0, 1, 3, 5, 7, 8, 10], harmonic: [0, 2, 3, 5, 7, 8, 11], major: [0, 2, 4, 5, 7, 9, 11] };
-  // the shapes of a track: [section, phrases min, max]
-  const SHAPES = [
-    [['INTRO', 1, 2], ['GROOVE', 2, 4], ['BUILD', 1, 1], ['DROP', 3, 4], ['BREAK', 1, 2], ['BUILD', 1, 1], ['DROP', 3, 5], ['PEAK', 1, 2], ['GROOVE', 1, 2], ['OUTRO', 1, 2]],
-    [['INTRO', 1, 2], ['GROOVE', 3, 5], ['BUILD', 1, 1], ['DROP', 4, 6], ['GROOVE', 1, 2], ['OUTRO', 1, 2]],                                     // (one long drop)
-    [['INTRO', 1, 1], ['BUILD', 1, 1], ['DROP', 2, 3], ['BREAK', 1, 1], ['BUILD', 1, 1], ['DROP', 2, 3], ['BREAK', 1, 1], ['BUILD', 1, 1], ['PEAK', 2, 3], ['OUTRO', 1, 1]],   // (three waves)
-  ];
+  // (0.6) the form of a track, generated (siren_brain.c SB_FORM): an intro (in two parts now and then), one to four
+  // waves (a groove, a breakdown, a build: now and then a false one or a bar of silence before the drop, the drop or
+  // the peak, a ride after it), the outro; each style its proportions. Lengths in bars; chances per mille. The next
+  // track never takes the same order of sections as the one before.
+  const O = (...v) => v;
+  const F = (intro, intro2, groove1, midg, brks, brkl, build, drop, tail, outro, p) => ({ intro, intro2, groove1, midg, brks, brkl, build, drop, tail, outro,
+    pIntro2: p[0], pGroove1: p[1], pMid: p[2], pBreak1: p[3], pBuild: p[4], pFake: p[5], pPause: p[6], pPeak: p[7], pPeakLast: p[8], pTail: p[9], cycLo: p[10], cycHi: p[11], maxBars: p[12] });   // (maxBars: about six minutes)
+  const FORMS = {
+    TECHNO: F(O(16, 32), O(16, 32), O(16, 32, 32), O(16, 32), O(8), O(8, 16), O(8), O(16, 32, 32), O(16, 32), O(16, 32), [300, 900, 700, 400, 350, 0, 100, 500, 500, 600, 2, 3, 200]),
+    TRANCE: F(O(16, 32), O(16), O(16), O(8, 16), O(8, 16), O(16, 32, 32), O(8, 16, 16), O(16, 32), O(8, 16), O(16, 32), [600, 700, 200, 500, 1000, 150, 250, 100, 800, 300, 2, 3, 208]),
+    PSY: F(O(16), O(16, 32), O(32, 48), O(16, 32), O(8), O(8, 16), O(8), O(32, 48), O(16, 32), O(8, 16), [300, 900, 600, 200, 700, 100, 200, 200, 400, 400, 2, 4, 216]),
+    ACID: F(O(8, 16), O(16, 32), O(32, 48), O(16, 32), O(8), O(8, 16), O(8), O(32, 48), O(16, 32), O(8, 16), [400, 1000, 700, 500, 600, 50, 100, 200, 300, 500, 1, 3, 200]),
+    RAVE: F(O(8, 16), O(8, 16), O(16), O(8, 16), O(8), O(8, 16), O(8, 16), O(16, 32), O(8, 16), O(8, 16), [300, 600, 400, 500, 900, 200, 300, 200, 600, 300, 2, 3, 200]),
+    HARD: F(O(8, 16), O(8), O(16), O(8), O(8), O(8, 16), O(4, 8), O(16, 24, 32), O(8), O(8), [200, 500, 300, 600, 900, 250, 350, 200, 600, 200, 2, 4, 224]),
+    DNB: F(O(16, 32, 32), O(16), O(8), O(8), O(8), O(16, 24, 32), O(8, 16), O(32, 32, 48), O(8), O(16, 32), [300, 200, 100, 300, 1000, 150, 300, 100, 400, 200, 2, 3, 256]),
+    HOUSE: F(O(16, 32, 32), O(16, 32), O(32, 48, 64), O(16, 32), O(8), O(8, 16), O(8), O(32, 32, 48), O(16, 32), O(16, 32), [600, 900, 700, 700, 700, 100, 200, 200, 300, 600, 1, 3, 192]),
+  };
+  function form(f, r) {
+    const plan = [], add = (s, n) => { const l = plan[plan.length - 1]; if (l && l[0] === s) { l[1] += n; return; } if (plan.length < 40) plan.push([s, n]); };   // (the same twice: one longer)
+    add('INTRO', r.pick(f.intro));
+    if (r.chance(f.pIntro2)) add('GROOVE', r.pick(f.intro2));
+    const ncyc = f.cycLo + r.i(f.cycHi - f.cycLo + 1);
+    for (let c = 0; c < ncyc; c++) {
+      const last = c === ncyc - 1;
+      if (r.chance(c ? f.pMid : f.pGroove1)) add('GROOVE', r.pick(c ? f.midg : f.groove1));
+      if (c || r.chance(f.pBreak1)) add('BREAK', r.pick(c ? f.brkl : f.brks));
+      if (r.chance(f.pBuild)) {
+        add('BUILD', r.pick(f.build));
+        if (r.chance(f.pFake)) { const len = 4 * (1 + r.i(2)); add('BREAK', len); add('BUILD', r.pick(f.build)); }
+        if (r.chance(f.pPause)) add('BREAK', 1);
+      }
+      const sec = r.chance(last ? f.pPeakLast : f.pPeak) ? 'PEAK' : 'DROP';
+      add(sec, r.pick(f.drop));
+      if (!last && r.chance(f.pTail)) add('GROOVE', r.pick(f.tail));
+    }
+    if (r.chance(f.pTail)) add('GROOVE', r.pick(f.tail));
+    add('OUTRO', r.pick(f.outro));
+    return plan;
+  }
   // the grammars: a style's rules (per mille where a chance or a level; tuned by ear on the prototype)
   // layers: the chance each melodic layer plays in a track, in this order (arp, hook, pad, stab, fx, piano)
   const STYLES = {
-    TECHNO: { breakDrums: 1, groove: 'four', rumble: 550, kitTune: 1, sub: 0, dropBass: 0, gallop: 0, bpm: [126, 132], scales: ['minor', 'phrygian', 'dorian'], progs: [[0], [0, 0, 0, 5], [0, 3], [0, 0, 6, 0]], chordBars: 4, bass: ['rumble', 'offbeat', 'pulse'], swing: 40, layers: [350, 450, 450, 550, 1000, 0], hats: [5, 11], ride: 600, roll: 'snare', percLanes: ['rim', 'conga', 'toml', 'rim'], hatModes: ['16', 'off8', '16gap'],
-      shapes: [SHAPES[1], [['INTRO', 2, 2], ['GROOVE', 4, 6], ['BREAK', 1, 1], ['GROOVE', 2, 3], ['PEAK', 2, 4], ['GROOVE', 1, 2], ['OUTRO', 1, 2]], SHAPES[0]] },   // (techno rides, hypnotic)
-    TRANCE: { breakDrums: 0, groove: 'four', rumble: 0, kitTune: 1, sub: 0, dropBass: 0, gallop: 0, bpm: [136, 140], scales: ['minor', 'harmonic'], progs: [[0, 5, 2, 6], [0, 6, 5, 4], [0, 3, 5, 4], [5, 3, 0, 4], [0, 5, 3, 4]], chordBars: 2, bass: ['offbeat', 'offbeat', 'rolling'], swing: 0, layers: [950, 850, 950, 200, 1000, 0], hats: [4, 8], ride: 800, roll: 'snare', percLanes: ['shake', 'rim'], hatModes: ['16', '16gap'],
-      shapes: [SHAPES[0], [['INTRO', 2, 2], ['GROOVE', 2, 3], ['BUILD', 1, 1], ['DROP', 3, 4], ['BREAK', 2, 3], ['BUILD', 1, 2], ['PEAK', 4, 5], ['OUTRO', 1, 2]]] },   // (the long breakdown)
-    PSY: { breakDrums: 1, groove: 'four', rumble: 0, kitTune: 1, sub: 0, dropBass: 0, gallop: 0, bpm: [142, 146], scales: ['phrygian', 'harmonic'], progs: [[0], [0, 1], [0, 0, 0, 1]], chordBars: 8, bass: ['rolling'], swing: 0, layers: [600, 700, 350, 100, 1000, 0], hats: [6, 10], ride: 300, roll: 'snare', percLanes: ['shake', 'conga', 'rim'], hatModes: ['16', '16'],
-      shapes: [SHAPES[1], SHAPES[2], [['INTRO', 1, 1], ['GROOVE', 4, 6], ['BUILD', 1, 1], ['DROP', 4, 6], ['BREAK', 1, 1], ['DROP', 2, 3], ['OUTRO', 1, 1]]] },
-    ACID: { breakDrums: 1, groove: 'four', rumble: 150, kitTune: 0, sub: 0, dropBass: 0, gallop: 0, bpm: [128, 134], scales: ['minor', 'phrygian'], progs: [[0], [0, 0, 5, 0]], chordBars: 8, bass: ['acid'], swing: 80, layers: [200, 500, 300, 300, 1000, 0], hats: [6, 12], ride: 500, roll: 'clap', percLanes: ['bell', 'rim', 'clave'], hatModes: ['16', '16gap'],
-      shapes: [SHAPES[1], [['INTRO', 1, 2], ['GROOVE', 4, 6], ['BREAK', 1, 1], ['BUILD', 1, 1], ['DROP', 4, 6], ['OUTRO', 1, 2]]] },
-    RAVE: { breakDrums: 0, groove: 'breaks', rumble: 0, kitTune: 0, sub: 0, dropBass: 0, gallop: 0, bpm: [140, 150], scales: ['minor', 'harmonic'], progs: [[0, 5, 6, 4], [0, 3, 6, 5], [0, 6, 5, 6]], chordBars: 2, bass: ['reese', 'offbeat'], swing: 0, layers: [400, 600, 600, 950, 1000, 600], hats: [6, 12], ride: 400, roll: 'snare', percLanes: ['rim', 'shake'], hatModes: ['8', '16gap'],
-      shapes: SHAPES },
-    HARD: { breakDrums: 1, groove: 'four', rumble: 350, kitTune: 1, sub: 0, dropBass: 0, gallop: 500, bpm: [150, 165], scales: ['harmonic', 'phrygian'], progs: [[0, 5, 6, 4], [0, 1], [0, 6, 5, 4]], chordBars: 2, bass: ['offbeat', 'pulse'], swing: 0, layers: [500, 850, 400, 500, 1000, 0], hats: [6, 12], ride: 600, roll: 'snare', percLanes: ['rim', 'toml'], hatModes: ['16', '16gap'],
-      shapes: SHAPES },
+    TECHNO: { breakDrums: 1, groove: 'four', rumble: 550, kitTune: 1, sub: 0, dropBass: 0, gallop: 0, bpm: [126, 132], scales: ['minor', 'phrygian', 'dorian'], progs: [[0], [0, 0, 0, 5], [0, 3], [0, 0, 6, 0]], chordBars: 4, bass: ['rumble', 'offbeat', 'pulse'], swing: 40, layers: [350, 450, 450, 550, 1000, 0], hats: [5, 11], ride: 600, roll: 'snare', percLanes: ['rim', 'conga', 'toml', 'rim'], hatModes: ['16', 'off8', '16gap'] },   // (techno rides, hypnotic)
+    TRANCE: { breakDrums: 0, groove: 'four', rumble: 0, kitTune: 1, sub: 0, dropBass: 0, gallop: 0, bpm: [136, 140], scales: ['minor', 'harmonic'], progs: [[0, 5, 2, 6], [0, 6, 5, 4], [0, 3, 5, 4], [5, 3, 0, 4], [0, 5, 3, 4]], chordBars: 2, bass: ['offbeat', 'offbeat', 'rolling'], swing: 0, layers: [950, 850, 950, 200, 1000, 0], hats: [4, 8], ride: 800, roll: 'snare', percLanes: ['shake', 'rim'], hatModes: ['16', '16gap'] },   // (the long breakdown)
+    PSY: { breakDrums: 1, groove: 'four', rumble: 0, kitTune: 1, sub: 0, dropBass: 0, gallop: 0, bpm: [142, 146], scales: ['phrygian', 'harmonic'], progs: [[0], [0, 1], [0, 0, 0, 1]], chordBars: 8, bass: ['rolling'], swing: 0, layers: [600, 700, 350, 100, 1000, 0], hats: [6, 10], ride: 300, roll: 'snare', percLanes: ['shake', 'conga', 'rim'], hatModes: ['16', '16'] },
+    ACID: { breakDrums: 1, groove: 'four', rumble: 150, kitTune: 0, sub: 0, dropBass: 0, gallop: 0, bpm: [128, 134], scales: ['minor', 'phrygian'], progs: [[0], [0, 0, 5, 0]], chordBars: 8, bass: ['acid'], swing: 80, layers: [200, 500, 300, 300, 1000, 0], hats: [6, 12], ride: 500, roll: 'clap', percLanes: ['bell', 'rim', 'clave'], hatModes: ['16', '16gap'] },
+    RAVE: { breakDrums: 0, groove: 'breaks', rumble: 0, kitTune: 0, sub: 0, dropBass: 0, gallop: 0, bpm: [140, 150], scales: ['minor', 'harmonic'], progs: [[0, 5, 6, 4], [0, 3, 6, 5], [0, 6, 5, 6]], chordBars: 2, bass: ['reese', 'offbeat'], swing: 0, layers: [400, 600, 600, 950, 1000, 600], hats: [6, 12], ride: 400, roll: 'snare', percLanes: ['rim', 'shake'], hatModes: ['8', '16gap'] },
+    HARD: { breakDrums: 1, groove: 'four', rumble: 350, kitTune: 1, sub: 0, dropBass: 0, gallop: 500, bpm: [150, 165], scales: ['harmonic', 'phrygian'], progs: [[0, 5, 6, 4], [0, 1], [0, 6, 5, 4]], chordBars: 2, bass: ['offbeat', 'pulse'], swing: 0, layers: [500, 850, 400, 500, 1000, 0], hats: [6, 12], ride: 600, roll: 'snare', percLanes: ['rim', 'toml'], hatModes: ['16', '16gap'] },
     // DRUM & BASS: the two-step, rolling basslines (reese and sub), liquid pads and bells
-    DNB: { breakDrums: 0, groove: 'dnb', rumble: 0, kitTune: 1, sub: 850, dropBass: 0, gallop: 0, bpm: [170, 176], scales: ['minor', 'dorian'], progs: [[0, 5, 3, 4], [0, 3], [0, 6, 5, 4], [0, 0, 5, 6]], chordBars: 2, bass: ['roller', 'reese', 'roller'], swing: 0, layers: [500, 500, 900, 450, 1000, 0], hats: [6, 10], ride: 700, roll: 'snare', percLanes: ['rim', 'shake'], hatModes: ['8', '16gap'],
-      shapes: [[['INTRO', 2, 2], ['BUILD', 1, 1], ['DROP', 4, 5], ['BREAK', 1, 2], ['BUILD', 1, 1], ['DROP', 4, 5], ['OUTRO', 1, 2]], SHAPES[0]] },
+    DNB: { breakDrums: 0, groove: 'dnb', rumble: 0, kitTune: 1, sub: 850, dropBass: 0, gallop: 0, bpm: [170, 176], scales: ['minor', 'dorian'], progs: [[0, 5, 3, 4], [0, 3], [0, 6, 5, 4], [0, 0, 5, 6]], chordBars: 2, bass: ['roller', 'reese', 'roller'], swing: 0, layers: [500, 500, 900, 450, 1000, 0], hats: [6, 10], ride: 700, roll: 'snare', percLanes: ['rim', 'shake'], hatModes: ['8', '16gap'] },
     // HOUSE: four to the floor with swing, the clap on 2 and 4, the open hat on the offbeat, shakers and congas;
     // minor and dorian chords that move (piano, organ), a bass that bounces, a long groove then a breakdown and a drop
-    HOUSE: { breakDrums: 0, groove: 'four', rumble: 0, kitTune: 1, sub: 0, dropBass: 0, gallop: 0, bpm: [122, 126], scales: ['minor', 'dorian'], progs: [[0, 3], [0, 5, 2, 6], [0, 3, 6, 4], [0, 0, 3, 3]], chordBars: 2, bass: ['offbeat', 'pulse', 'offbeat'], swing: 70, layers: [350, 800, 800, 950, 900, 0], hats: [4, 9], ride: 500, roll: 'clap', percLanes: ['shake', 'conga', 'clave'], hatModes: ['off8', '16', '16gap'],
-      shapes: [SHAPES[1], [['INTRO', 2, 2], ['GROOVE', 3, 4], ['BREAK', 1, 2], ['BUILD', 1, 1], ['DROP', 4, 5], ['GROOVE', 1, 2], ['OUTRO', 1, 2]], SHAPES[0]] },
+    HOUSE: { breakDrums: 0, groove: 'four', rumble: 0, kitTune: 1, sub: 0, dropBass: 0, gallop: 0, bpm: [122, 126], scales: ['minor', 'dorian'], progs: [[0, 3], [0, 5, 2, 6], [0, 3, 6, 4], [0, 0, 3, 3]], chordBars: 2, bass: ['offbeat', 'pulse', 'offbeat'], swing: 70, layers: [350, 800, 800, 950, 900, 0], hats: [4, 9], ride: 500, roll: 'clap', percLanes: ['shake', 'conga', 'clave'], hatModes: ['off8', '16', '16gap'] },
   };
   const STYLE_NAMES = Object.keys(STYLES);
   const STYLE_ORDER = ['HOUSE', 'TECHNO', 'ACID', 'TRANCE', 'PSY', 'HARD', 'RAVE', 'DNB'];   // (neighbours by tempo and family)
@@ -103,9 +128,21 @@
     this.prog = r.pick(st.progs); this.chordBars = st.chordBars;
     this.kitPick = r.next(); this.swing = st.swing;
     this.bassKind = r.pick(st.bass);
-    // the arrangement: one of the style's shapes, its lengths in phrases of 8 bars drawn from the seed (in bars here)
-    const shape = r.pick(st.shapes);
-    this.plan = shape.map(([s, a, b]) => [s, (a + r.i(b - a + 1)) * 8]);
+    // the arrangement (0.6): its form, from its own stream; never the order of sections the last track had
+    {
+      const pr = rng(hash(this.seed, 7)), was = prev && this.plan ? this.plan.map((x) => x[0]).join() : null;
+      let plan = null;
+      for (let t = 0; t < 5; t++) { plan = form(FORMS[this.style], pr); if (was === null || plan.map((x) => x[0]).join() !== was) break; }
+      // too long for the style: the longest of its long sections 8 bars shorter, until it fits
+      let bars = plan.reduce((a, x) => a + x[1], 0);
+      while (bars > FORMS[this.style].maxBars) {
+        let k = -1;
+        for (let i = 0; i < plan.length; i++) if (plan[i][0] !== 'BUILD' && plan[i][0] !== 'BREAK' && plan[i][1] > 16 && (k < 0 || plan[i][1] > plan[k][1])) k = i;
+        if (k < 0) break;
+        plan[k][1] -= 8; bars -= 8;
+      }
+      this.plan = plan;
+    }
     this.planAt = 0; this.secBar = 0; this.phraseBar = 0;
     this.layerOn = {}; LAYER_KEYS.forEach((k, i) => { this.layerOn[k] = r.chance(st.layers[i]); });
     if (!this.layerOn.hook && !this.layerOn.arp) this.layerOn.hook = true;   // (a track always sings something)

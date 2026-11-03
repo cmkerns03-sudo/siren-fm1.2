@@ -46,6 +46,8 @@ int main(int argc, char **argv)
         wf = fopen(path, "wb"); wn = 0; wav_hdr(wf, 0);
         bb = bar_blocks();
         blocks(bb * 20);                                     /* into the set */
+        siren_cmd(SC_DROP, 0, 0, 0); blocks(bb * 2);         /* (0.6: the forms vary: the effects heard in a drop, the */
+        siren_cmd(SC_STAY, 0, 0, 0);                         /* section held, so each is measured on the same music) */
         printf("dj: %s (%u BPM)\n", SB_STYLE_NAMES[st], sb.bpm);
         for (k = 0; k < 16; k++) {
             const siren_px_t *P = &SIREN_PX[st][k]; double before, before_lo, during, during_lo, after; uint32_t i;
