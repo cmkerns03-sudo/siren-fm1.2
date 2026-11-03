@@ -87,6 +87,21 @@ static const sb_style_t SB_STY[SB_NSTYLES] = {
  * its proportions (from how its records are made: house's 32-bar intros and long grooves, techno's rides and few
  * builds, trance's long breakdowns, drum & bass's two drops, hard techno's short intros and frequent drops). Lengths
  * in bars; chances per mille. The next track never takes the same order of sections as the one before. */
+/* (0.6) how a track begins: the DJ's drum intro, or an atmosphere with no kick (a pad, a riser), the hook alone, the
+ * whole groove under a closed low-pass that opens, the bassline and hats before the kick (the first half of the intro;
+ * the drums come in for the second), straight into the groove and the drop, or the breakdown first. Each style its
+ * share of each (per mille), as its records begin */
+enum { IK_DRUMS, IK_ATMOS, IK_HOOK, IK_FILTER, IK_BASS, IK_DIRECT, IK_BREAK, IK_N };
+static const uint16_t SB_INTRO_W[SB_NSTYLES][IK_N] = {
+    {500, 100, 50, 100, 200, 50, 0},      /* TECHNO */
+    {200, 250, 150, 100, 0, 50, 250},     /* TRANCE */
+    {330, 200, 50, 100, 250, 70, 0},      /* PSY */
+    {330, 50, 50, 150, 370, 50, 0},       /* ACID */
+    {330, 100, 200, 100, 50, 150, 70},    /* RAVE */
+    {330, 100, 100, 100, 70, 300, 0},     /* HARD */
+    {330, 150, 100, 100, 150, 70, 100},   /* DNB */
+    {500, 50, 200, 150, 100, 0, 0},       /* HOUSE */
+};
 typedef struct { uint8_t n, v[4]; } sb_opt_t;
 typedef struct {
     sb_opt_t intro, intro2, groove1, midg, brks, brkl, build, drop, tail, outro;
@@ -121,19 +136,30 @@ static void sb_sec(sb_brain_t *b, int sec, int len)
 static void sb_form(sb_brain_t *b, sb_rng_t *r)
 {
     const sb_form_t *f = &SB_FORM[b->style];
-    int c, ncyc, sec, len;
+    int c, ncyc, sec, len, ik = 0, w = (int)sb_ri(r, 1000);
+    static const uint8_t DIRECT[2] = {4, 8};
+    while (ik < IK_N - 1 && w >= SB_INTRO_W[b->style][ik]) w -= SB_INTRO_W[b->style][ik++];
+    b->intro_kind = (uint8_t)ik;
     b->plan_n = 0;
-    sb_sec(b, SEC_INTRO, sb_opt(r, &f->intro));
-    if (sb_rchance(r, f->p_intro2)) sb_sec(b, SEC_GROOVE, sb_opt(r, &f->intro2));
+    if (ik == IK_DIRECT) sb_sec(b, SEC_GROOVE, SB_PICK(r, DIRECT));               /* (straight in: a few bars, the drop) */
+    else if (ik == IK_BREAK) sb_sec(b, SEC_BREAK, sb_opt(r, &f->brkl));          /* (the breakdown first) */
+    else {
+        sb_sec(b, SEC_INTRO, sb_opt(r, &f->intro));
+        if (sb_rchance(r, f->p_intro2)) sb_sec(b, SEC_GROOVE, sb_opt(r, &f->intro2));
+    }
     ncyc = f->cyc_lo + (int)sb_ri(r, (uint32_t)(f->cyc_hi - f->cyc_lo + 1));
     for (c = 0; c < ncyc; c++) {
         int last = c == ncyc - 1;
-        if (sb_rchance(r, c ? f->p_mid : f->p_groove1)) sb_sec(b, SEC_GROOVE, sb_opt(r, c ? &f->midg : &f->groove1));
-        if (c || sb_rchance(r, f->p_break1)) sb_sec(b, SEC_BREAK, sb_opt(r, c ? &f->brkl : &f->brks));
-        if (sb_rchance(r, f->p_build)) {
-            sb_sec(b, SEC_BUILD, sb_opt(r, &f->build));
-            if (sb_rchance(r, f->p_fake)) { len = 4 * (1 + (int)sb_ri(r, 2)); sb_sec(b, SEC_BREAK, len); sb_sec(b, SEC_BUILD, sb_opt(r, &f->build)); }
-            if (sb_rchance(r, f->p_pause)) sb_sec(b, SEC_BREAK, 1);
+        if (!c && ik == IK_BREAK) sb_sec(b, SEC_BUILD, sb_opt(r, &f->build));      /* (the breakdown first: its build, the drop) */
+        else if (!c && ik == IK_DIRECT) { }                                         /* (straight in: the drop now) */
+        else {
+            if (sb_rchance(r, c ? f->p_mid : f->p_groove1)) sb_sec(b, SEC_GROOVE, sb_opt(r, c ? &f->midg : &f->groove1));
+            if (c || sb_rchance(r, f->p_break1)) sb_sec(b, SEC_BREAK, sb_opt(r, c ? &f->brkl : &f->brks));
+            if (sb_rchance(r, f->p_build)) {
+                sb_sec(b, SEC_BUILD, sb_opt(r, &f->build));
+                if (sb_rchance(r, f->p_fake)) { len = 4 * (1 + (int)sb_ri(r, 2)); sb_sec(b, SEC_BREAK, len); sb_sec(b, SEC_BUILD, sb_opt(r, &f->build)); }
+                if (sb_rchance(r, f->p_pause)) sb_sec(b, SEC_BREAK, 1);
+            }
         }
         sec = sb_rchance(r, last ? f->p_peaklast : f->p_peak) ? SEC_PEAK : SEC_DROP;
         sb_sec(b, sec, sb_opt(r, &f->drop));
@@ -481,7 +507,8 @@ static void sb_add(sb_events_t *ev, int L, int n, int v, int len)
     x = &ev->notes[ev->nnotes++];
     x->layer = (uint8_t)L; x->note = (uint8_t)sb_clamp(n, 0, 127); x->vel = (uint8_t)sb_clamp(v, 1, 127); x->len = (uint16_t)(len ? len : 1);
 }
-#define SB_DRUM(lane, v) sb_add(ev, L_DRUMS, (lane), (v), 1)
+/* (0.6) quiet: 2 no drums at all (the atmosphere's and the hook's first half), 1 no kick and no backbeat (the bassline's) */
+#define SB_DRUM(lane, v) do { int ln_ = (lane); if (!(quiet == 2 || (quiet == 1 && (ln_ == SBD_KICK || ln_ == SBD_KICK2 || ln_ == SBD_CLAP || ln_ == SBD_SNARE)))) sb_add(ev, L_DRUMS, ln_, (v), 1); } while (0)
 
 void sb_step16(sb_brain_t *b, sb_events_t *ev)
 {
@@ -492,7 +519,12 @@ void sb_step16(sb_brain_t *b, sb_events_t *ev)
     int lastBarOfBuild = sec == SEC_BUILD && barInSec == secLen - 1;
     sb_rng_t r = sb_rng(sb_hash(b->seed, bar * 16u + (uint32_t)step + 99991u));
     int chord, dens = b->knobs[K_DENSITY], G = st->groove, brk, live, intro0, kickOn, brkD, half, bb, bbOn, offbeat, ohOn, bassDrop, t, L;
+    /* (0.6) the intro as its kind plays it: its first half its own opening, then the drums come in; the filtered one is
+     * the drop itself, under a low-pass that opens across the intro */
+    int sec_real = sec, ik = sec == SEC_INTRO ? b->intro_kind : IK_DRUMS, first = ik != IK_DRUMS && 2 * barInSec < secLen;
+    int quiet = first && (ik == IK_ATMOS || ik == IK_HOOK) ? 2 : first && ik == IK_BASS ? 1 : 0;
     (void)dummy;
+    if (ik == IK_FILTER) { sec = SEC_DROP; e = sb_clamp(SB_SEC_E[SEC_DROP] + (b->knobs[K_ENERGY] - 500) * 7 / 10, 0, 1000); }
     ev->nnotes = 0; ev->has_wob = 0;
     for (L = 0; L < SB_NLAYERS; L++) ev->cut[L] = -1;
     if (step == 0 && b->bpm != b->bpm_target) b->bpm = (uint8_t)(b->bpm + (b->bpm_target > b->bpm ? 1 : -1));
@@ -553,12 +585,12 @@ void sb_step16(sb_brain_t *b, sb_events_t *ev)
     }
     /* ---- bass, its wobble, the sub */
     {
-        int bassOn = !brk && sec != SEC_INTRO && !lastBarOfBuild && !(sec == SEC_BUILD && st->sub && barInSec < secLen - 2 && b->bass_kind != SBBK_ROLLER);
+        int bassOn = !brk && (sec != SEC_INTRO || ik == IK_BASS) && !lastBarOfBuild && !(sec == SEC_BUILD && st->sub && barInSec < secLen - 2 && b->bass_kind != SBBK_ROLLER);
         if (b->has_alt && live && step == 0 && barInSec % 4 == 0) {
             int a = (barInSec / 4) % 3;
             if (b->bass_alt[a] != b->snd[L_BASS]) { b->snd[L_BASS] = b->bass_alt[a]; b->sounds_changed = 1; }
         }
-        if (bassOn && e > 300) {
+        if (bassOn && (e > 300 || ik == IK_BASS)) {
             const sb_bstep_t *s = &b->bass[(b->bass_n > 16 ? (int)(bar % 2) * 16 : 0) + step];
             if (s->on && !(sec == SEC_BUILD && b->has_alt)) {
                 sb_add(ev, L_BASS, SB_NOTE(s->d, s->o, 36), s->v, s->slide ? s->len + 1 : s->len);
@@ -581,7 +613,7 @@ void sb_step16(sb_brain_t *b, sb_events_t *ev)
         }
     }
     /* ---- the hook */
-    if (!bassDrop && b->layer_on[1] && (live || brk || (sec == SEC_GROOVE && barInSec >= 4 && e > 500))) {
+    if ((!bassDrop && b->layer_on[1] && (live || brk || (sec == SEC_GROOVE && barInSec >= 4 && e > 500))) || ik == IK_HOOK) {
         const sb_hstep_t *s = &b->hook[(barInPhrase * 16 + step) % b->hook_n];
         if (s->on) sb_add(ev, L_HOOK, sb_fold(SB_NOTE(s->d, s->o, 48), 74), s->v * (750 + 250 * e / 1000) / 1000, s->len);
     }
@@ -596,8 +628,9 @@ void sb_step16(sb_brain_t *b, sb_events_t *ev)
     if (!bassDrop && b->layer_on[3] && live && b->stab[step]) { sb_add(ev, L_STAB, SB_NOTE(0, 0, 60), 100, 1); sb_add(ev, L_STAB, SB_NOTE(2, 0, 60), 100, 1); sb_add(ev, L_STAB, SB_NOTE(4, 0, 60), 100, 1); }
     /* ---- fx: the riser */
     if (sec == SEC_BUILD && barInSec == 0 && step == 0) sb_add(ev, L_FX, 60 + b->key, 110, secLen * 16 - 1);
+    if (ik == IK_ATMOS && barInSec == 0 && step == 0) sb_add(ev, L_FX, 60 + b->key, 96, secLen * 8 - 1);   /* (0.6: the atmosphere's swell) */
     /* ---- the filters, the master, the duck */
-    t = sec == SEC_BUILD ? (barInSec * 16 + step) * 1000 / (secLen * 16) : 0;
+    t = sec == SEC_BUILD ? (barInSec * 16 + step) * 1000 / (secLen * 16) : ik == IK_ATMOS && first ? (barInSec * 16 + step) * 1000 / (secLen * 8) : 0;
     if (!st->sub) ev->cut[L_BASS] = (int16_t)(350 + 500 * e / 1000);
     ev->cut[L_ARP] = (int16_t)(300 + 600 * e / 1000); ev->cut[L_HOOK] = (int16_t)(450 + 500 * e / 1000);
     ev->cut[L_PAD] = (int16_t)(250 + 500 * e * (1000 - b->knobs[K_TENSION] / 2) / 1000000); ev->cut[L_FX] = (int16_t)(100 + 850 * t / 1000);
@@ -605,7 +638,8 @@ void sb_step16(sb_brain_t *b, sb_events_t *ev)
     ev->duck = (int16_t)(550 + 350 * e / 1000);
     { int ee = e * 1000 / 900; ev->gain = (int16_t)(brk ? 580 : 600 + 400 * (ee < 1000 ? ee : 1000) / 1000); }
     ev->verb = (int16_t)(brk ? 600 : sec == SEC_BUILD ? 350 + 400 * t / 1000 : 250);
-    ev->bar = bar; ev->step = (uint8_t)step; ev->sec = (uint8_t)sec; ev->chord = (uint8_t)chord; ev->key = b->key; ev->scale = b->scale; ev->e = (int16_t)e; ev->bpm = b->bpm;
+    ev->lp = (int16_t)(ik == IK_FILTER ? 850 - 850 * (barInSec * 16 + step) / (secLen * 16) : 0);
+    ev->bar = bar; ev->step = (uint8_t)step; ev->sec = (uint8_t)sec_real; ev->chord = (uint8_t)chord; ev->key = b->key; ev->scale = b->scale; ev->e = (int16_t)e; ev->bpm = b->bpm;
     ev->sec_bar = (uint16_t)barInSec; ev->sec_len = (uint16_t)secLen; ev->plan_at = b->plan_at; ev->plan_n = b->plan_n;
     /* the clock */
     b->step++;

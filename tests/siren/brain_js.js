@@ -24,7 +24,7 @@ for (let i = 0; i < steps; i++) {
   const cuts = {}; let wob = '';
   for (const [L, w, v] of ev.params) { if (w === 'cut') cuts[L] = v; else wob = ` w${v.rate3}/${v.shape}/${v.depth}/${v.growl}`; }
   for (const L of LN) if (cuts[L] != null) l += ` c${L}=${cuts[L]}`;
-  l += wob + ` m${ev.master.hp}/${ev.master.duck}/${ev.master.gain}/${ev.master.verb}`;
+  l += wob + ` m${ev.master.hp}/${ev.master.duck}/${ev.master.gain}/${ev.master.verb}/${ev.master.lp}`;
   if (b.soundsChanged) { l += ' S' + LN.slice(0, 7).map((L) => (b.soundIdx[L] ?? -1) + ',').join('') + `k${b.sounds.DRUMS.kickN16},${b.sounds.DRUMS.kick2N16}`; b.soundsChanged = false; }
   out.push(l);
 }

@@ -26,7 +26,7 @@ int main(int argc, char **argv)
         for (k = 0; k < ev.nnotes; k++) printf(" %s:%d:%d:%d", LN[ev.notes[k].layer], ev.notes[k].note, ev.notes[k].vel, ev.notes[k].len);
         for (L = 0; L < SB_NLAYERS; L++) if (ev.cut[L] >= 0) printf(" c%s=%d", LN[L], ev.cut[L]);
         if (ev.has_wob) printf(" w%d/%d/%d/%d", ev.wob.rate3, ev.wob.shape, ev.wob.depth, ev.wob.growl);
-        printf(" m%d/%d/%d/%d", ev.hp, ev.duck, ev.gain, ev.verb);
+        printf(" m%d/%d/%d/%d/%d", ev.hp, ev.duck, ev.gain, ev.verb, ev.lp);
         if (b.sounds_changed) { printf(" S"); for (L = 0; L < 7; L++) printf("%d,", b.snd[L]); printf("k%d,%d", b.kick_n16, b.kick2_n16); b.sounds_changed = 0; }
         printf("\n");
     }

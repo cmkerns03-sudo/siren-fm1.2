@@ -33,6 +33,11 @@
   // waves (a groove, a breakdown, a build: now and then a false one or a bar of silence before the drop, the drop or
   // the peak, a ride after it), the outro; each style its proportions. Lengths in bars; chances per mille. The next
   // track never takes the same order of sections as the one before.
+  // (0.6) how a track begins (siren_brain.c IK_*, SB_INTRO_W): the DJ's drum intro, an atmosphere with no kick, the hook
+  // alone, the groove under a low-pass that opens, the bassline before the kick, straight in, or the breakdown first
+  const IK = { DRUMS: 0, ATMOS: 1, HOOK: 2, FILTER: 3, BASS: 4, DIRECT: 5, BREAK: 6 };
+  const INTRO_W = { TECHNO: [500, 100, 50, 100, 200, 50, 0], TRANCE: [200, 250, 150, 100, 0, 50, 250], PSY: [330, 200, 50, 100, 250, 70, 0], ACID: [330, 50, 50, 150, 370, 50, 0],
+    RAVE: [330, 100, 200, 100, 50, 150, 70], HARD: [330, 100, 100, 100, 70, 300, 0], DNB: [330, 150, 100, 100, 150, 70, 100], HOUSE: [500, 50, 200, 150, 100, 0, 0] };
   const O = (...v) => v;
   const F = (intro, intro2, groove1, midg, brks, brkl, build, drop, tail, outro, p) => ({ intro, intro2, groove1, midg, brks, brkl, build, drop, tail, outro,
     pIntro2: p[0], pGroove1: p[1], pMid: p[2], pBreak1: p[3], pBuild: p[4], pFake: p[5], pPause: p[6], pPeak: p[7], pPeakLast: p[8], pTail: p[9], cycLo: p[10], cycHi: p[11], maxBars: p[12] });   // (maxBars: about six minutes)
@@ -46,19 +51,30 @@
     DNB: F(O(16, 32, 32), O(16), O(8), O(8), O(8), O(16, 24, 32), O(8, 16), O(32, 32, 48), O(8), O(16, 32), [300, 200, 100, 300, 1000, 150, 300, 100, 400, 200, 2, 3, 256]),
     HOUSE: F(O(16, 32, 32), O(16, 32), O(32, 48, 64), O(16, 32), O(8), O(8, 16), O(8), O(32, 32, 48), O(16, 32), O(16, 32), [600, 900, 700, 700, 700, 100, 200, 200, 300, 600, 1, 3, 192]),
   };
-  function form(f, r) {
+  function form(f, r, wts) {
     const plan = [], add = (s, n) => { const l = plan[plan.length - 1]; if (l && l[0] === s) { l[1] += n; return; } if (plan.length < 40) plan.push([s, n]); };   // (the same twice: one longer)
-    add('INTRO', r.pick(f.intro));
-    if (r.chance(f.pIntro2)) add('GROOVE', r.pick(f.intro2));
+    let ik = 0, w = r.i(1000);
+    while (ik < 6 && w >= wts[ik]) w -= wts[ik++];
+    plan.ik = ik;
+    if (ik === IK.DIRECT) add('GROOVE', r.pick([4, 8]));                 // (straight in: a few bars, the drop)
+    else if (ik === IK.BREAK) add('BREAK', r.pick(f.brkl));             // (the breakdown first)
+    else {
+      add('INTRO', r.pick(f.intro));
+      if (r.chance(f.pIntro2)) add('GROOVE', r.pick(f.intro2));
+    }
     const ncyc = f.cycLo + r.i(f.cycHi - f.cycLo + 1);
     for (let c = 0; c < ncyc; c++) {
       const last = c === ncyc - 1;
-      if (r.chance(c ? f.pMid : f.pGroove1)) add('GROOVE', r.pick(c ? f.midg : f.groove1));
-      if (c || r.chance(f.pBreak1)) add('BREAK', r.pick(c ? f.brkl : f.brks));
-      if (r.chance(f.pBuild)) {
-        add('BUILD', r.pick(f.build));
-        if (r.chance(f.pFake)) { const len = 4 * (1 + r.i(2)); add('BREAK', len); add('BUILD', r.pick(f.build)); }
-        if (r.chance(f.pPause)) add('BREAK', 1);
+      if (!c && ik === IK.BREAK) add('BUILD', r.pick(f.build));         // (the breakdown first: its build, the drop)
+      else if (!c && ik === IK.DIRECT) { /* (straight in: the drop now) */ }
+      else {
+        if (r.chance(c ? f.pMid : f.pGroove1)) add('GROOVE', r.pick(c ? f.midg : f.groove1));
+        if (c || r.chance(f.pBreak1)) add('BREAK', r.pick(c ? f.brkl : f.brks));
+        if (r.chance(f.pBuild)) {
+          add('BUILD', r.pick(f.build));
+          if (r.chance(f.pFake)) { const len = 4 * (1 + r.i(2)); add('BREAK', len); add('BUILD', r.pick(f.build)); }
+          if (r.chance(f.pPause)) add('BREAK', 1);
+        }
       }
       const sec = r.chance(last ? f.pPeakLast : f.pPeak) ? 'PEAK' : 'DROP';
       add(sec, r.pick(f.drop));
@@ -132,7 +148,7 @@
     {
       const pr = rng(hash(this.seed, 7)), was = prev && this.plan ? this.plan.map((x) => x[0]).join() : null;
       let plan = null;
-      for (let t = 0; t < 5; t++) { plan = form(FORMS[this.style], pr); if (was === null || plan.map((x) => x[0]).join() !== was) break; }
+      for (let t = 0; t < 5; t++) { plan = form(FORMS[this.style], pr, INTRO_W[this.style]); if (was === null || plan.map((x) => x[0]).join() !== was) break; }
       // too long for the style: the longest of its long sections 8 bars shorter, until it fits
       let bars = plan.reduce((a, x) => a + x[1], 0);
       while (bars > FORMS[this.style].maxBars) {
@@ -141,7 +157,7 @@
         if (k < 0) break;
         plan[k][1] -= 8; bars -= 8;
       }
-      this.plan = plan;
+      this.plan = plan; this.introKind = plan.ik;
     }
     this.planAt = 0; this.secBar = 0; this.phraseBar = 0;
     this.layerOn = {}; LAYER_KEYS.forEach((k, i) => { this.layerOn[k] = r.chance(st.layers[i]); });
@@ -348,7 +364,13 @@
   // ---------------------------------------------------------------------------------------- one sixteenth ---
   Brain.prototype.step16 = function () {
     const ev = { notes: [], params: [], master: {}, info: null };
-    const st = this.g, k = this.knobs, sec = this.section(), e = this.energy(), p = this.pat;
+    const st = this.g, k = this.knobs, p = this.pat;
+    let sec = this.section(), e = this.energy();
+    // (0.6) the intro as its kind plays it: its first half its own opening, then the drums come in; the filtered one is
+    // the drop itself, under a low-pass that opens across the intro
+    const secReal = sec, ik = sec === 'INTRO' ? this.introKind : IK.DRUMS, first0 = ik !== IK.DRUMS && 2 * this.secBar < this.plan[this.planAt][1];
+    const quiet = first0 && (ik === IK.ATMOS || ik === IK.HOOK) ? 2 : first0 && ik === IK.BASS ? 1 : 0;
+    if (ik === IK.FILTER) { sec = 'DROP'; e = clamp(SEC_E.DROP + div((k.energy - 500) * 7, 10), 0, 1000); }
     const step = this.step, bar = this.bar, barInPhrase = this.phraseBar;
     const secLen = this.plan[this.planAt][1], barInSec = this.secBar;
     const lastBarOfBuild = sec === 'BUILD' && barInSec === secLen - 1;
@@ -361,7 +383,7 @@
     const dens = k.density;
 
     // ---- drums: the style's groove (four on the floor, breakbeats, the two-step, half time)
-    const DP = p.DRUMS, drum = (lane, v) => add('DRUMS', D[lane], v, 1), G = st.groove;
+    const DP = p.DRUMS, drum = (lane, v) => { if (!(quiet === 2 || (quiet === 1 && (lane === 'kick' || lane === 'kick2' || lane === 'clap' || lane === 'snare')))) add('DRUMS', D[lane], v, 1); }, G = st.groove;
     const brk = sec === 'BREAK', live = sec === 'DROP' || sec === 'PEAK', intro0 = sec === 'INTRO' && barInSec < 2 && this.trackNo === 0;
     const kickOn = !brk && !(lastBarOfBuild && step >= 8) && !(sec === 'BUILD' && G !== 'four' && barInSec >= secLen - 2 && step >= 8);
     const brkD = !brk || st.breakDrums;               // (techno, psy, acid and hard keep their hats and percussion through a break)
@@ -416,12 +438,12 @@
       if (4 * barInSec >= 3 * secLen && step % 2 === 1) drum(st.roll, 70 + div(50 * barInSec, secLen));
     }
     // ---- bass (ducked by the kick); dubstep's and drum & bass's carry their wobble, and a sub under them
-    const bassOn = !brk && sec !== 'INTRO' && !lastBarOfBuild && !(sec === 'BUILD' && st.sub && barInSec < secLen - 2 && this.bassKind !== 'roller');
+    const bassOn = !brk && (sec !== 'INTRO' || ik === IK.BASS) && !lastBarOfBuild && !(sec === 'BUILD' && st.sub && barInSec < secLen - 2 && this.bassKind !== 'roller');
     if (this.bassAlt && live && step === 0 && barInSec % 4 === 0) {   // (dubstep: the switch-up)
       const a = div(barInSec, 4) % 3;
       if (this.bassAlt[a] !== this.soundIdx.BASS) { this.soundIdx.BASS = this.bassAlt[a]; this.sounds.BASS = this.bassAltS[a]; this.soundsChanged = true; }
     }
-    if (bassOn && e > 300) {
+    if (bassOn && (e > 300 || ik === IK.BASS)) {
       const B = p.BASS, b = B[(B.length > 16 ? (bar % 2) * 16 : 0) + step];
       if (b && !(sec === 'BUILD' && this.bassAlt)) {
         add('BASS', note(b.d, b.o, 36), b.v, b.slide ? b.len + 1 : b.len);
@@ -444,7 +466,7 @@
       }
     }
     // ---- the hook: in the drops, the peak, the break (alone, the theme), late grooves
-    if (!bassDrop && this.layerOn.hook && (live || brk || (sec === 'GROOVE' && barInSec >= 4 && e > 500))) {
+    if ((!bassDrop && this.layerOn.hook && (live || brk || (sec === 'GROOVE' && barInSec >= 4 && e > 500))) || ik === IK.HOOK) {
       const H = p.HOOK, s = H[(barInPhrase * 16 + step) % H.length];
       if (s) add('HOOK', fold(note(s.d, s.o, 48), 74), div(s.v * (750 + div(250 * e, 1000)), 1000), s.len);
     }
@@ -459,15 +481,17 @@
     if (!bassDrop && this.layerOn.stab && live && p.STAB[step]) for (const d of [0, 2, 4]) add('STAB', note(d, 0, 60), 100, 1);
     // ---- fx: the riser through the build
     if (sec === 'BUILD' && barInSec === 0 && step === 0) add('FX', 60 + this.key, 110, secLen * 16 - 1);
+    if (ik === IK.ATMOS && barInSec === 0 && step === 0) add('FX', 60 + this.key, 96, secLen * 8 - 1);   // (0.6: the atmosphere's swell)
     // ---- what the engines' filters, the master and the duck do (per mille)
-    const t = sec === 'BUILD' ? div((barInSec * 16 + step) * 1000, secLen * 16) : 0;
+    const t = sec === 'BUILD' ? div((barInSec * 16 + step) * 1000, secLen * 16) : ik === IK.ATMOS && first0 ? div((barInSec * 16 + step) * 1000, secLen * 8) : 0;
     if (!st.sub) ev.params.push(['BASS', 'cut', 350 + div(500 * e, 1000)]);
     ev.params.push(['ARP', 'cut', 300 + div(600 * e, 1000)], ['HOOK', 'cut', 450 + div(500 * e, 1000)], ['PAD', 'cut', 250 + div(500 * e * (1000 - div(k.tension, 2)), 1000000)], ['FX', 'cut', 100 + div(850 * t, 1000)]);
     ev.master.hp = sec === 'BUILD' ? Math.max(0, div((t - 500) * 16, 10)) : 0;     // the high-pass sweep at the end of a build
     ev.master.duck = 550 + div(350 * e, 1000);
     ev.master.gain = brk ? 580 : 600 + div(400 * Math.min(1000, div(e * 1000, 900)), 1000);   // a break breathes lower, a drop hits
     ev.master.verb = brk ? 600 : sec === 'BUILD' ? 350 + div(400 * t, 1000) : 250;
-    ev.info = { bar, step, sec, e, bpm: this.bpm, label: this.label, track: this.trackNo, chord, key: this.key, scale: this.scaleName, kit: this.kit, secBar: barInSec, secLen, plan: this.plan.map((x) => x[0]), planLen: this.plan.map((x) => x[1]), planAt: this.planAt };
+    ev.master.lp = ik === IK.FILTER ? 850 - div(850 * (barInSec * 16 + step), secLen * 16) : 0;   // (0.6: the filtered intro opening)
+    ev.info = { bar, step, sec: secReal, e, bpm: this.bpm, label: this.label, track: this.trackNo, chord, key: this.key, scale: this.scaleName, kit: this.kit, secBar: barInSec, secLen, plan: this.plan.map((x) => x[0]), planLen: this.plan.map((x) => x[1]), planAt: this.planAt };
     // the clock
     this.step++;
     if (this.step === 16) { this.step = 0; this.bar++; this.nextBar(); }

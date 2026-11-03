@@ -480,7 +480,8 @@ static void siren_mixer(const sb_events_t *ev)
         song.g[G_DRREV] = (int16_t)sb_clamp(SIREN_DMIX[st][1] * ls / 100, 0, 127);
         song.g[G_DRDLY] = (int16_t)sb_clamp(SIREN_DMIX[st][2] * ls / 100, 0, 127);
     }
-    song.g[G_FILT] = (int16_t)(sr.ufilt < 0 ? sr.ufilt : sr.ufilt > hp ? sr.ufilt : hp);
+    if (!sr.ufilt && ev->lp > 0) song.g[G_FILT] = (int16_t)-(ev->lp * 50 / 1000);   /* (0.6: the filtered intro, opening) */
+    else song.g[G_FILT] = (int16_t)(sr.ufilt < 0 ? sr.ufilt : sr.ufilt > hp ? sr.ufilt : hp);
 }
 
 /* one sixteenth: the brain's events into the parts and the drums */

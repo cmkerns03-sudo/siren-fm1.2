@@ -32,6 +32,7 @@ typedef struct {
     int16_t cut[SB_NLAYERS];          /* per mille, -1: no move */
     uint8_t has_wob; sb_wob_t wob;    /* the bass's wobble for its note this step */
     int16_t hp, duck, gain, verb;     /* the master (per mille) */
+    int16_t lp;                       /* (0.6) the master's low-pass closed (per mille): the filtered intro opening */
     /* what the screen shows */
     uint32_t bar; uint8_t step, sec, chord, key, scale; int16_t e; uint8_t bpm;
     uint16_t sec_bar, sec_len; uint8_t plan_at, plan_n;
@@ -52,6 +53,7 @@ typedef struct {
     uint8_t scale, key, bpm, bpm_target; const uint8_t *prog; uint8_t nprog, chord_bars;
     uint32_t kit_pick; uint8_t swing, bass_kind;
     uint8_t plan_sec[SB_PLAN_MAX]; uint16_t plan_len[SB_PLAN_MAX]; uint8_t plan_n, plan_at; uint16_t sec_bar;
+    uint8_t intro_kind;               /* (0.6) how the track begins (siren_brain.c IK_*) */
     uint8_t layer_on[6];              /* arp hook pad stab fx piano */
     uint32_t track_start_bar;
     /* the sounds: an index in the style's selection per layer (-1 none); the kit, its kick tuned */
