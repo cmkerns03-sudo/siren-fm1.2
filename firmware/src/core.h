@@ -14,6 +14,9 @@
 #ifndef SIREN
 #define SIREN 0
 #endif
+#ifndef ABYSS
+#define ABYSS 0                  /* (with SIREN 1) ABYSS: SIREN's sister, ambient (abyss.c, abyss_ui.c) */
+#endif
 #if SIREN
 #undef CLIPPER_SYNTH
 #define CLIPPER_SYNTH 1

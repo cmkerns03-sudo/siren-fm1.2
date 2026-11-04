@@ -166,6 +166,19 @@ run "SIREN 0.3: the deck screen drawn through a set (only what changes sent; san
 $SIR -DNVOICE=8 -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -o "$OUT/siren_pages" tests/siren/pages_test.c -lm -lpthread
 mkdir -p build/siren_pages
 run "SIREN 0.8: the pages (no button to hold) and the keyboard in the hands (the layer taken, given back; chords, octave, arpeggiator; sanitizers)" "$OUT/siren_pages" build/siren_pages
+# ABYSS (SIREN=1 ABYSS=1, 12 voices): the brain alone (every world, its plans and notes), every world through the firmware's
+# audio path (sanitizers), each sound at its layer's loudness, the pages and the hands
+ABY="$CCS -O2 -w -DSIREN=1 -DABYSS=1 -DNVOICE=12 -I. -Ibuild/gen -Ifirmware/src -Ifirmware/hal"
+ABY_UB="$ABY -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all"
+$CCS -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -o "$OUT/abyss_brain" tests/abyss/brain_test.c
+run "ABYSS: the brain (three worlds, their plans, the notes in range, no overflow; sanitizers)" "$OUT/abyss_brain"
+$ABY_UB -o "$OUT/abyss_host" tests/abyss/abyss_host.c -lm -lpthread
+run "ABYSS: every world through the firmware's audio path, a gesture in each (sanitizers)" sh -c 'for w in 0 1 2; do "$0" $w S1R-3N0$w 600 /dev/null 200 1 >/dev/null || exit 1; done' "$OUT/abyss_host"
+$ABY -o "$OUT/abyss_levels" tests/abyss/level_cal.c -lm -lpthread
+run "ABYSS: every sound at its layer's loudness (tools/abyss/levels.json)" sh -c '"$0" check > "$1/abyss_levels.txt"' "$OUT/abyss_levels" "$OUT"
+$ABY_UB -o "$OUT/abyss_pages" tests/abyss/pages_test.c -lm -lpthread
+mkdir -p build/abyss_pages
+run "ABYSS: the pages and the hands (worlds, gestures, layers, seeds, the keyboard taken and given back; sanitizers)" "$OUT/abyss_pages" build/abyss_pages
 $SYN -o "$OUT/engines2_test" tests/engines2_test.c -lm
 mkdir -p build/eng2_demo
 run "Clipper 0.2 ACID (accent, sweep, slide), STRINGS (registers, ensemble), MACRO (chords, swarm, additive, speech, LPG)" "$OUT/engines2_test" build/eng2_demo

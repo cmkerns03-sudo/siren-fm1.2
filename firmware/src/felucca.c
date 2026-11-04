@@ -25,7 +25,9 @@
 #include "voice.c"
 #include "slicer.c"          /* per-track SLICER insert, used by fx.c */
 #include "fx.c"
-#if SIREN
+#if SIREN && ABYSS
+#include "abyss.c"            /* ABYSS: SIREN's sister, ambient (abyss_brain.c, abyss_data.h) */
+#elif SIREN
 #include "siren.c"            /* SIREN: the brain and its sound (siren_brain.c, siren_data.h) */
 #endif
 #ifndef FELUCCA_OTA
@@ -71,7 +73,9 @@
 #include "ui_layers.c"       /* hold a function button: what the keys and knobs do (TE style) */
 #include "ui_menu.c"
 #include "ui_input.c"
-#if SIREN
+#if SIREN && ABYSS
+#include "abyss_ui.c"         /* ABYSS: its screen and controls */
+#elif SIREN
 #include "siren_ui.c"         /* SIREN: its screen and controls */
 #endif
 #ifndef FELUCCA_FLASH

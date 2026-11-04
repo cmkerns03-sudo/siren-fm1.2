@@ -105,7 +105,8 @@ def generate():
             [tools / "gen_fm6_patches.py", GEN / "felucca_fm6.h"],
             [tools / "gen_wavetables.py", GEN / "felucca_wavetables.h"],   # Clipper 0.2: WAVE
             [tools / "gen_logo.py", GEN / "sloop_logo.h"],
-            [tools / "gen_siren.py", GEN / "siren_data.h"]]   # SIREN: its sounds and drum kits
+            [tools / "gen_siren.py", GEN / "siren_data.h"],   # SIREN: its sounds and drum kits
+            [tools / "gen_abyss.py", GEN / "abyss_data.h"]]   # ABYSS: its sounds and drum kits
     procs = [subprocess.Popen([sys.executable, *map(str, c)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               text=True) for c in cmds]
     failed = []
@@ -182,7 +183,7 @@ def build_loader():
 def build_app():
     flags = [*CFLAGS, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_CDC", "FELUCCA_UART",
-                 "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_CPU1", "NVOICE", "SIREN"):   # (Clipper: NVOICE=12 ./build.sh, the CPU trials; SIREN=1)
+                 "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_CPU1", "NVOICE", "SIREN", "ABYSS"):   # (Clipper: NVOICE=12 ./build.sh, the CPU trials; SIREN=1)
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1") or (flag == "NVOICE" and v in ("8", "12", "16")):
             flags.append(f"-D{flag}={v}")

@@ -22,6 +22,7 @@ def main():
                     'the BREAK sample follows FELUCCA_SLICE in this process environment (tools/gen_samples.py)')
     ap.add_argument('--nvoice', choices=['8', '12', '16'], help='NVOICE for the compile (Clipper: the voices; default 8)')
     ap.add_argument('--siren', choices=['0', '1'], help='SIREN=1: the SIREN firmware (siren.c) instead of Clipper')
+    ap.add_argument('--abyss', choices=['0', '1'], help='ABYSS=1 (with --siren 1): the ABYSS firmware (abyss.c)')
     args = ap.parse_args()
     os.chdir(ROOT)
     import build
@@ -37,6 +38,8 @@ def main():
         extra.append('NVOICE=' + args.nvoice)
     if args.siren:
         extra.append('SIREN=' + args.siren)
+    if args.abyss:
+        extra.append('ABYSS=' + args.abyss)
     subprocess.run(['wsl', '-d', args.distro, '--cd', src, '--exec', 'env',
                     'JIELI_TOOLCHAIN=' + args.toolchain, 'AC79_SDK=' + sdk, *extra,
                     'python3', '-c', code], check=True)
