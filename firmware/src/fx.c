@@ -235,9 +235,29 @@ static inline void master_pre(int32_t *l, int32_t *r)
 
 
 
+/* (SIREN 0.8.2, ABYSS 0.1.2) the master's tail (the buses and the master's chain: mix_tail) reads the song's values
+ * through FXG and FX_PLAYING. Under SIREN it runs a block later, on the second core while this one renders the next
+ * block's parts: it reads the values its own block was rendered with (fx_tq, taken at the end of that block), so it
+ * plays what it played before, every sample, one block (0.7 ms) later. Elsewhere: the song's own, as before */
+#if SIREN
+static struct {
+    int32_t ml[CTL], mr[CTL], sc[CTL], sd[CTL], sv[CTL];   /* the block's dry mix and its three sends */
+    int32_t m1;                                             /* the master's gain at its end (x SIREN's) */
+    int16_t g[G_COUNT];                                     /* the song's values */
+    int8_t eqk[3];                                          /* SIREN's isolator (bus.c) */
+    uint8_t playing;
+    uint32_t n;                                             /* its samples; 0: nothing queued */
+} fx_tq;
+#define FXG fx_tq.g
+#define FX_PLAYING fx_tq.playing
+#else
+#define FXG song.g
+#define FX_PLAYING song.playing
+#endif
+
 static uint32_t delay_samples(void)
 {
-    uint32_t s = dly_samples((uint32_t)song.g[G_DTIME]);
+    uint32_t s = dly_units((uint32_t)FXG[G_DTIME]) / (uint32_t)FXG[G_BPM];   /* (as core.h dly_samples) */
     return s < 16u ? 16u : s >= DLY_SPAN - 4u ? DLY_SPAN - 4u : s;
 }
 
@@ -373,16 +393,16 @@ static void plate_step(int32_t x, int32_t decay, int32_t damp, uint32_t pre, int
 /* the plate over a block: rev_in (the reverb sends) -> + wet_l, wet_r */
 static void plate_run(const int32_t *rev_in, int32_t *wet_l, int32_t *wet_r, uint32_t n, int32_t rg0, int32_t rg1)
 {
-    int32_t rt = song.g[G_RTYPE], hall = rt >= RT_HALL;
-    int32_t decay = hall ? 16384 + song.g[G_RSIZE] * 104          /* (1.0) HALL: 0.5 .. 0.9, RT60 ~2 .. 10 s */
-                         : 6554 + song.g[G_RSIZE] * 155;        /* 0.2 .. 0.8: RT60 ~0.8 .. 5 s (twice a half) */
-    int32_t damp = 32767 - song.g[G_RDAMP] * 193;               /* the damping low-pass: open .. 0.25 */
+    int32_t rt = FXG[G_RTYPE], hall = rt >= RT_HALL;
+    int32_t decay = hall ? 16384 + FXG[G_RSIZE] * 104          /* (1.0) HALL: 0.5 .. 0.9, RT60 ~2 .. 10 s */
+                         : 6554 + FXG[G_RSIZE] * 155;        /* 0.2 .. 0.8: RT60 ~0.8 .. 5 s (twice a half) */
+    int32_t damp = 32767 - FXG[G_RDAMP] * 193;               /* the damping low-pass: open .. 0.25 */
     if (rt == RT_SHIMMER) {                                     /* (the octave line feeds the tank: kept under a loop gain
                                                                  * of 1, the top always damped a little) */
         decay = decay > SH_DECAY ? SH_DECAY : decay;
         damp = damp > SH_DAMP ? SH_DAMP : damp;
     }
-    uint32_t pre = (uint32_t)clamp(song.g[G_RPRE] + (hall ? 18 : 0), 0, 100) * 2205u / 100u;   /* ms -> 22.05 kHz
+    uint32_t pre = (uint32_t)clamp(FXG[G_RPRE] + (hall ? 18 : 0), 0, 100) * 2205u / 100u;   /* ms -> 22.05 kHz
                                                                  * samples (HALL: 18 ms more, a big room's) */
     int32_t bw = hall ? 18000 : 26000, shim = rt == RT_SHIMMER ? SH_GAIN : 0;   /* (SHIMMER: some of the tail an octave up) */
     uint32_t i;
@@ -455,12 +475,12 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
                      int32_t *wet_r, uint32_t n)
 {
     uint32_t i, k, dl = delay_samples(), dlo;
-    int32_t fb = song.g[G_DFDBK] * 230, col = 2000 + song.g[G_DCOLOR] * 240;
-    int32_t dmix = song.g[G_DMIX] * 258;
-    int32_t g = 17000 + song.g[G_RSIZE] * 104, lpk = 32767 - song.g[G_RDAMP] * 200;   /* loop gain (RT60 ~0.4..4 s), damping */
-    int32_t cdepth = song.g[G_CDEPTH] * 6, cdep0;
+    int32_t fb = FXG[G_DFDBK] * 230, col = 2000 + FXG[G_DCOLOR] * 240;
+    int32_t dmix = FXG[G_DMIX] * 258;
+    int32_t g = 17000 + FXG[G_RSIZE] * 104, lpk = 32767 - FXG[G_RDAMP] * 200;   /* loop gain (RT60 ~0.4..4 s), damping */
+    int32_t cdepth = FXG[G_CDEPTH] * 6, cdep0;
     int32_t ca0, ca1, cb0, cb1, ma, mb, dca, dcb;
-    int plate = CLIPPER_SYNTH && song.g[G_RTYPE] >= RT_PLATE;   /* Clipper: the plate (1.0: HALL, SHIMMER: its tank)
+    int plate = CLIPPER_SYNTH && FXG[G_RTYPE] >= RT_PLATE;   /* Clipper: the plate (1.0: HALL, SHIMMER: its tank)
                                                                  * instead of the room */
     const uint32_t L0 = REV_LINE[0] + REV_MOD + 2u, B1 = L0, B2 = B1 + REV_LINE[1], B3 = B2 + REV_LINE[2];
     int32_t rg0 = 32767, rg1 = 32767;                   /* (1.0) the reverb's share over the block (a change of type) */
@@ -470,7 +490,7 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
          * silence (no old tail bursting out of its lines) */
         static int fam_used = -1, was_shim;
         static uint8_t rv_fade;
-        int shim = song.g[G_RTYPE] == RT_SHIMMER;
+        int shim = FXG[G_RTYPE] == RT_SHIMMER;
         if (fam_used < 0)
             fam_used = plate;
         if (plate != fam_used) {
@@ -501,7 +521,7 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
     dl = fx.dl_cur, dlo = fx.dl_old;
 #if CLIPPER_SYNTH
     {   /* (1.0) a new MODE: the fade starts (one at a time); TAPE's swing at both ends of the block */
-        uint32_t dm = song.g[G_DMODE] <= DM_TAPE ? song.g[G_DMODE] : DM_MONO;
+        uint32_t dm = FXG[G_DMODE] <= DM_TAPE ? FXG[G_DMODE] : DM_MONO;
         int32_t dw = (int32_t)((dl * 197u) >> 8) + 1536, t1;   /* (wow: 0.3 % of TIME + 6 samples; flutter: 2) */
         if (fx.dm_x == 0 && fx.dm_old == fx.dm_cur)
             fx.dm_x = DL_XF;                            /* (from the start: nothing to fade) */
@@ -517,7 +537,7 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
     fx.cdep += clamp(cdepth - fx.cdep, -10, 10);
     {   /* the chorus' two read points (Q8 samples back) and line 0's extra length, at both ends of the block */
         int32_t s0 = osc_sine(fx.cho_ph), s1, m0 = osc_sine(fx.rev_ph), m1;
-        fx.cho_ph += LFO_INC[song.g[G_CRATE] & 127];
+        fx.cho_ph += LFO_INC[FXG[G_CRATE] & 127];
         fx.rev_ph += LFO_INC[30];
         s1 = osc_sine(fx.cho_ph);
         m1 = osc_sine(fx.rev_ph);
@@ -1425,7 +1445,7 @@ static int32_t crush_bits(int32_t v, int32_t shift)    /* fewer bits, rounded to
 
 static void dust_process(int32_t *l, int32_t *r, uint32_t n)
 {
-    int32_t d = song.g[G_DUST], hold, shift, a, drive, hiss, i, bed0, bed1;
+    int32_t d = FXG[G_DUST], hold, shift, a, drive, hiss, i, bed0, bed1;
     uint32_t pc;
     if (!d) {
         dust.bed = 0;
@@ -1438,7 +1458,7 @@ static void dust_process(int32_t *l, int32_t *r, uint32_t n)
     hiss = d * 2;
     pc = (uint32_t)d * 7u;                              /* crackle: chance per sample, x 2^-22 */
     bed0 = dust.bed;                                    /* ~0.1 s from 0 to full (238 a block of 32) */
-    bed1 = dust.bed = clamp(dust.bed + (song.playing ? 238 : -238), 0, 32767);
+    bed1 = dust.bed = clamp(dust.bed + (FX_PLAYING ? 238 : -238), 0, 32767);
     for (i = 0; i < (int32_t)n; i++) {
         int32_t x = l[i], y = r[i];
         int32_t bed = bed0 + (((bed1 - bed0) * i) >> CTL_LOG2);
@@ -1467,7 +1487,7 @@ static void dust_process(int32_t *l, int32_t *r, uint32_t n)
 static void djf_process(int32_t *l, int32_t *r, uint32_t n)
 {
     tsvf_t c;
-    if (!djf_block(&djf, song.g[G_FILT], &c))
+    if (!djf_block(&djf, FXG[G_FILT], &c))
         return;
     djf_run(&djf, &c, l, n, 0);
     djf_run(&djf, &c, r, n, 1);
@@ -1501,30 +1521,146 @@ static void siren_drums_job(uint32_t arg)
 }
 #endif
 static int32_t master_cur = -1;                        /* the volume knob, ramped per sample (no zipper) */
+/* the master's tail of a block: the buses (sc, sd, sv: the chorus, delay and reverb sends) onto the dry mix (ml, mr), the
+ * master's chain, the master's gain (m1 at the block's end, ramped from the last block's), the limiter -> out (n <=
+ * CTL; ml, mr are worked in place) */
+static void mix_tail(int32_t *ml, int32_t *mr, const int32_t *sc, const int32_t *sd, const int32_t *sv, int32_t m1,
+                     int32_t *out, uint32_t n)
+{
+    uint32_t i;
+    int32_t m0;
+    fx_buses(sc, sd, sv, wet_l, wet_r, n);
+    for (i = 0; i < n; i++) {
+        ml[i] += wet_l[i];
+        mr[i] += wet_r[i];
+    }
+    dust_process(ml, mr, n);
+    punch_process(ml, mr, n);
+    djf_process(ml, mr, n);
+#if CLIPPER_SYNTH
+    bus_process(ml, mr, n);
+#endif
+    m0 = master_cur < 0 ? m1 : master_cur;
+    master_cur = m1;
+    {
+        static int32_t ol[CTL], orr[CTL], ul[CTL], ur[CTL];
+        static uint8_t usb_was;
+        for (i = 0; i < n; i++) {
+            int32_t m = m0 + (((m1 - m0) * (int32_t)i) >> CTL_LOG2);
+            int32_t xl = clamp(ml[i], -MIX_MAX, MIX_MAX), xr = clamp(mr[i], -MIX_MAX, MIX_MAX);
+            ol[i] = MULQ12R(xl, m, 2);                 /* (1.0: bounded first: x MASTER in 32 bits; #4: rounded, */
+            orr[i] = MULQ12R(xr, m, 2);                /* (x >> 2) * m >> 10 floored to 4 LSB) */
+            master_pre(&ol[i], &orr[i]);
+            if ((i & 1u)) {                             /* the visualiser: every other sample, as audio.c reads it */
+                vis_tap[2u * i] = (int16_t)knee(ml[i]);
+                vis_tap[2u * i + 1u] = (int16_t)knee(mr[i]);
+            }
+            if (usb_full_now) {                         /* USB AUDIO = FULL: MASTER all the way up (4096) */
+                ul[i] = ml[i], ur[i] = mr[i];           /* (#4: x 4096 / 4096, every bit; it was floored to 4 LSB) */
+                master_pre_usb(&ul[i], &ur[i]);
+            }
+        }
+        lim_block(&lim_dac, ol, orr, n);
+#if SIREN
+        siren_scope_tap();
+#endif
+        for (i = 0; i < n; i++) {
+            out[2u * i] = knee(ol[i]);
+            out[2u * i + 1u] = knee(orr[i]);
+        }
+        if (usb_full_now && !usb_was) {                 /* (a new recording: no old block in its delay) */
+            memset(&lim_usb, 0, sizeof lim_usb);
+            lim_usb.env = LIM_T, lim_usb.g = 32768, lim_usb.hold = 0;
+        }
+        usb_was = usb_full_now;
+        if (usb_full_now) {
+            lim_block(&lim_usb, ul, ur, n);
+            for (i = 0; i < n; i++) {
+                usb_out[2u * i] = knee(ul[i]);
+                usb_out[2u * i + 1u] = knee(ur[i]);
+            }
+        }
+    }
+}
+#if SIREN
+/* the master's gain at a block's end, SIREN's breath and drop in it */
+static int32_t master_gain_now(void) { return ((int32_t)song.master_q12 * siren_gain_q12()) >> 12; }
+/* (SIREN 0.8.2, ABYSS 0.1.2) the block just rendered, queued for its tail (fx_tq): its dry mix and sends, the song's
+ * values and SIREN's it was rendered with */
+static void tail_queue(uint32_t n)
+{
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        fx_tq.ml[i] = mix_l[i], fx_tq.mr[i] = mix_r[i];
+        fx_tq.sc[i] = send_c[i], fx_tq.sd[i] = send_d[i], fx_tq.sv[i] = send_r[i];
+    }
+    memcpy(fx_tq.g, song.g, sizeof fx_tq.g);
+    for (i = 0; i < 3u; i++)
+        fx_tq.eqk[i] = (int8_t)siren_eq_db(i);
+    fx_tq.playing = (uint8_t)song.playing;
+    fx_tq.m1 = master_gain_now();
+    fx_tq.n = n;
+}
+static int32_t *tail_out;
+static void tail_job(uint32_t arg)                     /* the queued block's tail, into tail_out (either core); arg 1:
+                                                         * then this block's drums (SIREN: siren_drums_job) */
+{
+    if (fx_tq.n)
+        mix_tail(fx_tq.ml, fx_tq.mr, fx_tq.sc, fx_tq.sd, fx_tq.sv, fx_tq.m1, tail_out, fx_tq.n);
+    if (arg)
+        siren_drums_job(0);
+}
+#endif
 static void mix_block(int32_t *out, uint32_t n)
 {
     uint32_t i;
-    int32_t m0, m1;
     for (i = 0; i < n; i++)
         send_c[i] = send_d[i] = send_r[i] = mix_l[i] = mix_r[i] = 0;
-    events_block(n);
-    duck_block(n * (uint32_t)song.g[G_BPM]);
 #if SIREN
-    if (n <= CTL) {   /* (SIREN 0.4) the drums on the second core while this one renders the one-voice layers (bass, arp,
-                       * hook, fx); then the chords (pad, stabs), their voices split over both cores as before. The
-                       * same sums in another order: the same output, bit for bit (integers) */
+    if (n <= CTL) {
+        /* (SIREN 0.8.2, ABYSS 0.1.2) a pipeline over the two cores: the last block's tail (its buses, the master: a
+         * quarter of the work, which core 1 waited out before) on core 1, while this one starts this block's parts;
+         * then the parts' voices split over both, as before. The output is the last block's, as it was, one block (32
+         * samples, 0.7 ms) later; the first block of all is silence */
         static const uint8_t FIRST[4] = {0, 1, 2, 5}, LAST[2] = {3, 4};
+#if ABYSS
+        const uint32_t during = 1u, c1drums = 0u;   /* (the parts this core renders alone while core 1 runs the tail:
+                                       * ABYSS the drone; then the pad, the low, the swell, the drums (here: rare and
+                                       * light), the melody, the bells, split) */
+#else
+        const uint32_t during = 4u, c1drums = 1u;   /* (SIREN: its one-voice layers, the bass, the arp, the hook, the fx,
+                                       * while core 1 runs the tail, then the drums as before; then the pad and the
+                                       * stabs split) */
+#endif
         int handed;
-        drums.a0 = TDRUM->att;                          /* (the drum track's mute fade: here, on this core) */
+        events_block(n);
+        duck_block(n * (uint32_t)song.g[G_BPM]);
+        tail_out = out;
+        if (!fx_tq.n)
+            for (i = 0; i < 2u * n; i++)
+                out[i] = 0;
+        drums.a0 = TDRUM->att;                          /* (the drum track's mute fade: before core 1 has the drums) */
         drums.a1 = 32767 - gain_next(TDRUM);
         sd_n = n;
-        handed = cpu1_on() && cpu1_units != 0 && cpu1_run(siren_drums_job, 0);
+        handed = (fx_tq.n || c1drums) && cpu1_on() && cpu1_units != 0 && cpu1_run(tail_job, c1drums);
         siren_c1_busy = (uint8_t)handed;
-        for (i = 0; i < 4u; i++)
+        for (i = 0; i < 4u; i++) {
+            if (i == during) {                          /* (ABYSS: the tail done before the pad) */
+                if (!handed || cpu1_wait() < 0)
+                    tail_job(c1drums);                  /* (one core, or core 1 late and held: here) */
+                handed = -1;
+                siren_c1_busy = 0;
+            }
             mix_part(&trk[FIRST[i]], n);
-        if (!handed || cpu1_wait() < 0)
-            siren_drums_job(0);                         /* (one core, or core 1 late and held: here) */
-        siren_c1_busy = 0;
+        }
+        if (handed >= 0) {                              /* (SIREN: the tail and the drums after the four, as the
+                                                         * drums were: the random numbers drawn in the same order) */
+            if (!handed || cpu1_wait() < 0)
+                tail_job(c1drums);                      /* (one core, or core 1 late and held: here) */
+            siren_c1_busy = 0;
+        }
+        if (!c1drums)
+            siren_drums_job(0);                         /* (ABYSS: here, after the four, as before) */
         for (i = 0; i < 2u; i++)
             mix_part(&trk[LAST[i]], n);
         for (i = 0; i < n; i++) {
@@ -1533,8 +1669,15 @@ static void mix_block(int32_t *out, uint32_t n)
             send_r[i] += sd_v[i];
             send_d[i] += sd_d[i];
         }
-    } else
+        click_render(mix_l, mix_r, n);
+        siren_mix(mix_l, mix_r, n);                     /* SIREN: the sub under the bass (ABYSS: and the textures) */
+        tail_queue(n);
+        return;
+    }
+    fx_tq.n = 0;                                        /* (a longer block: at once, nothing queued) */
 #endif
+    events_block(n);
+    duck_block(n * (uint32_t)song.g[G_BPM]);
     {
     for (i = 0; i < NPART; i++)
         mix_part(&trk[i], n);
@@ -1569,63 +1712,11 @@ static void mix_block(int32_t *out, uint32_t n)
     click_render(mix_l, mix_r, n);                      /* the metronome: its own voice (drums.c), any kit, any mute */
 #if SIREN
     siren_mix(mix_l, mix_r, n);                         /* SIREN: the sub under the bass */
+    tail_queue(n > CTL ? CTL : n);
+    tail_out = out;
+    tail_job(0);
+    fx_tq.n = 0;
+#else
+    mix_tail(mix_l, mix_r, send_c, send_d, send_r, (int32_t)song.master_q12, out, n > CTL ? CTL : n);
 #endif
-    fx_buses(send_c, send_d, send_r, wet_l, wet_r, n);
-    for (i = 0; i < n; i++) {
-        mix_l[i] += wet_l[i];
-        mix_r[i] += wet_r[i];
-    }
-    dust_process(mix_l, mix_r, n);
-    punch_process(mix_l, mix_r, n);
-    djf_process(mix_l, mix_r, n);
-#if CLIPPER_SYNTH
-    bus_process(mix_l, mix_r, n);
-#endif
-    m1 = (int32_t)song.master_q12;
-#if SIREN
-    m1 = (m1 * siren_gain_q12()) >> 12;                 /* SIREN: a break breathes lower, a drop hits */
-#endif
-    m0 = master_cur < 0 ? m1 : master_cur;
-    master_cur = m1;
-    if (n > CTL)
-        n = CTL;                                        /* (the buffers' size) */
-    {
-        static int32_t ol[CTL], orr[CTL], ul[CTL], ur[CTL];
-        static uint8_t usb_was;
-        for (i = 0; i < n; i++) {
-            int32_t m = m0 + (((m1 - m0) * (int32_t)i) >> CTL_LOG2);
-            int32_t xl = clamp(mix_l[i], -MIX_MAX, MIX_MAX), xr = clamp(mix_r[i], -MIX_MAX, MIX_MAX);
-            ol[i] = MULQ12R(xl, m, 2);                 /* (1.0: bounded first: x MASTER in 32 bits; #4: rounded, */
-            orr[i] = MULQ12R(xr, m, 2);                /* (x >> 2) * m >> 10 floored to 4 LSB) */
-            master_pre(&ol[i], &orr[i]);
-            if ((i & 1u)) {                             /* the visualiser: every other sample, as audio.c reads it */
-                vis_tap[2u * i] = (int16_t)knee(mix_l[i]);
-                vis_tap[2u * i + 1u] = (int16_t)knee(mix_r[i]);
-            }
-            if (usb_full_now) {                         /* USB AUDIO = FULL: MASTER all the way up (4096) */
-                ul[i] = mix_l[i], ur[i] = mix_r[i];     /* (#4: x 4096 / 4096, every bit; it was floored to 4 LSB) */
-                master_pre_usb(&ul[i], &ur[i]);
-            }
-        }
-        lim_block(&lim_dac, ol, orr, n);
-#if SIREN
-        siren_scope_tap();
-#endif
-        for (i = 0; i < n; i++) {
-            out[2u * i] = knee(ol[i]);
-            out[2u * i + 1u] = knee(orr[i]);
-        }
-        if (usb_full_now && !usb_was) {                 /* (a new recording: no old block in its delay) */
-            memset(&lim_usb, 0, sizeof lim_usb);
-            lim_usb.env = LIM_T, lim_usb.g = 32768, lim_usb.hold = 0;
-        }
-        usb_was = usb_full_now;
-        if (usb_full_now) {
-            lim_block(&lim_usb, ul, ur, n);
-            for (i = 0; i < n; i++) {
-                usb_out[2u * i] = knee(ul[i]);
-                usb_out[2u * i + 1u] = knee(ur[i]);
-            }
-        }
-    }
 }

@@ -1231,11 +1231,16 @@ static void vs_job(uint32_t arg)                    /* on core 1 */
         vrender(vsj.t, vsj.e, vs_v[i], vs_buf, vsj.n, &vs_m[i], vs_g0[i], vs_g1[i], vs_side1, vs_tmp[1]);
     }
 }
-static int vs_ok(const engine_t *e)                 /* its render may run on two cores at once, for two voices */
+static int vs_ok(const engine_t *e)                 /* its render may run on two cores at once, for two voices
+                                                     * ((SIREN 0.8.2, ABYSS 0.1.2) WHEEL, PHYS, SAMPLE and NOISE too: their
+                                                     * voices keep their own state, tests/split_test.c the same output and
+                                                     * no race; not GRAIN (a part's pool of grains), VOICE (one noise for
+                                                     * all its voices)) */
 {
     return e == &ENG_HYBRID || e == &ENG_FMX || e == &ENG_WAVE || e == &ENG_ANALOG || e == &ENG_FM6 || e == &ENG_VPS ||
            e == &ENG_TERRAIN || e == &ENG_WSEQ || e == &ENG_MACRO || e == &ENG_STRINGS || e == &ENG_TRIO ||
-           e == &ENG_PHASE || e == &ENG_DIGITAL || e == &ENG_LOFI || e == &ENG_ACID || e == &ENG_JUNO || e == &ENG_VECTOR;
+           e == &ENG_PHASE || e == &ENG_DIGITAL || e == &ENG_LOFI || e == &ENG_ACID || e == &ENG_JUNO || e == &ENG_VECTOR ||
+           e == &ENG_DRAWBAR || e == &ENG_PHYS || e == &ENG_SAMPLE || e == &ENG_NOISE;
 }
 static void vs_finish(track_t *t, const engine_t *e, int32_t *out, uint32_t n)
 {

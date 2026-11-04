@@ -85,15 +85,15 @@ static inline int32_t bus_lp(int32_t x8, int32_t *s, int32_t k)
 
 /* -> 0..24 (SIREN: its isolator, siren.c; the slots are the drums' level and send) */
 #if SIREN
-#define bus_db(v, centre) siren_eq_db((centre) == EQ_LOW_C ? 0u : (centre) == EQ_MID_C ? 1u : 2u)
+#define bus_db(v, centre) fx_tq.eqk[(centre) == EQ_LOW_C ? 0u : (centre) == EQ_MID_C ? 1u : 2u]   /* (its block's: fx.c fx_tq) */
 #else
 static int32_t bus_db(int32_t v, int32_t centre) { return clamp(v - centre, -12, 12) + 12; }
 #endif
 
 static void bus_eq(int32_t *l, int32_t *r, uint32_t n)
 {
-    int32_t dl = bus_db(song.g[G_EQLOW], EQ_LOW_C), dm = bus_db(song.g[G_EQMID], EQ_MID_C),
-            dh = bus_db(song.g[G_EQHIGH], EQ_HIGH_C);
+    int32_t dl = bus_db(FXG[G_EQLOW], EQ_LOW_C), dm = bus_db(FXG[G_EQMID], EQ_MID_C),
+            dh = bus_db(FXG[G_EQHIGH], EQ_HIGH_C);
     int32_t tl = BUS_DB[dl] << 4, tm = BUS_DB[dm] << 4, th = BUS_DB[dh] << 4, kl = BUS_LO_K[dl], kh = BUS_HI_K[dh];
     int32_t gl0 = bus.gl, gm0 = bus.gm, gh0 = bus.gh, gl1, gm1, gh1, kl0, kh0;
     uint32_t i, c;
@@ -144,7 +144,7 @@ static void bus_eq(int32_t *l, int32_t *r, uint32_t n)
 static int32_t bus_gr_db10;                               /* the gain reduction now, 1/10 dB (the page's meter) */
 static void bus_comp(int32_t *l, int32_t *r, uint32_t n)
 {
-    int32_t amt = SIREN ? 0 : song.g[G_COMP], pk = 0, g0 = bus.gc, g1, x;
+    int32_t amt = SIREN ? 0 : FXG[G_COMP], pk = 0, g0 = bus.gc, g1, x;
     uint32_t i;
     if (!amt && bus.gc == 16384) {
         bus.env = 0;

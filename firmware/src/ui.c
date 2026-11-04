@@ -6,9 +6,9 @@
 #define UI_SMALL                                   /* (gfx.c: minsize on the device; a test alone: nothing) */
 #endif
 #if SIREN && ABYSS && !defined(FELUCCA_VERSION)
-#define FELUCCA_VERSION "ABYSS 0.1.1 EXP"   /* ABYSS: ambient that writes itself (abyss.c) */
+#define FELUCCA_VERSION "ABYSS 0.1.2 EXP"   /* ABYSS: ambient that writes itself (abyss.c) */
 #elif SIREN && !defined(FELUCCA_VERSION)
-#define FELUCCA_VERSION "SIREN 0.8.1 EXP"   /* SIREN: a rave that writes itself (siren.c) */
+#define FELUCCA_VERSION "SIREN 0.8.2 EXP"   /* SIREN: a rave that writes itself (siren.c) */
 #endif
 #ifndef FELUCCA_VERSION
 #define FELUCCA_VERSION "CLIPPER 1.3"  /* the synthesizer firmware for the FM-1 (from SLOOP 2.5, based on Felucca) */

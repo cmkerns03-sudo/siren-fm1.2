@@ -26,13 +26,41 @@ static struct {
     pthread_mutex_t mu;
     pthread_cond_t cv;
     int th_started, go, done;
+    uint64_t t_run, saved_ns;                            /* CORES=1: what two cores would save (cpu1_host_saved_ns) */
 } c1h;
+#include <time.h>
+static uint64_t c1h_ns(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec; }
+/* CORES=1: the time two cores would save, from each job and what this core did meanwhile (the smaller of the two):
+ * a render's time less this is its time on the device's two cores, as far as the host can tell */
+static uint64_t cpu1_host_saved_ns(void) { return c1h.saved_ns; }
 
 static uint32_t c1h_rand(void) { c1h.seed = c1h.seed * 1664525u + 1013904223u; return c1h.seed >> 8; }
 
+/* CORES=2: how deep core 1's jobs went into its stack (bytes below the thread's loop), for a report against the
+ * device's 4 KB (fm1_cpu1.h FM1_C1_STACK_WORDS; the host's 64-bit frames are larger than the device's) */
+#define C1H_PAINT 65536u
+static volatile uint8_t *c1h_paint_lo;
+static __attribute__((noinline)) void c1h_paint(void)
+{
+    volatile uint8_t buf[C1H_PAINT];
+    uint32_t i;
+    for (i = 0; i < C1H_PAINT; i++)
+        buf[i] = 0xA5;
+    c1h_paint_lo = buf;
+}
+static uint32_t cpu1_host_stack_used(void)
+{
+    uint32_t i;
+    if (!c1h_paint_lo)
+        return 0;
+    for (i = 0; i < C1H_PAINT && c1h_paint_lo[i] == 0xA5; i++)
+        ;
+    return C1H_PAINT - i;
+}
 static void *cpu1_host_thread(void *p)
 {
     (void)p;
+    c1h_paint();
     for (;;) {
         cpu1_job_t fn;
         uint32_t arg;
@@ -94,6 +122,7 @@ static int cpu1_run(cpu1_job_t fn, uint32_t arg)
     c1h.pending = 1;
     c1h.fn = fn;
     c1h.arg = arg;
+    c1h.t_run = c1h_ns();
     if (c1h.timeout_at && c1h.jobs == c1h.timeout_at)
         return 1;                                        /* lost: cpu1_wait says so */
     if (c1h.mode == 2) {
@@ -126,7 +155,10 @@ static int cpu1_wait(void)
             pthread_cond_wait(&c1h.cv, &c1h.mu);
         pthread_mutex_unlock(&c1h.mu);
     } else {
+        uint64_t t0 = c1h_ns(), mine = t0 - c1h.t_run, job;
         c1h.fn(c1h.arg);                                 /* inline, deferred to here: as late as the device's */
+        job = c1h_ns() - t0;
+        c1h.saved_ns += mine < job ? mine : job;
     }
     return 0;
 }
