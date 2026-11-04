@@ -310,7 +310,7 @@ static void siren_fire(void)
         sr.lplay = 1; siren_play(&x, u16 / 100u * 80u); sr.lplay = 0;
     }
     /* the textures (Q15 levels: hiss ~-31 dBFS at its most, wind ~-21, rumble ~-15) and the sub's swell */
-    sr.hiss_t = (ev->hiss + (sr.tape ? 250 : 0)) * 1100 / 1000;
+    sr.hiss_t = (ev->hiss + (sr.tape ? 250 * ev->tex / 1000 : 0)) * 1100 / 1000;
     sr.wind_t = ev->wind * 3200 / 1000;
     sr.wf_t = ev->wind_f;
     sr.rum_t = ev->rumble * 5200 / 1000;

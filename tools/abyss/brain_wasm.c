@@ -38,7 +38,7 @@ X int w_ev(int k)
     case 5: return E.wind_f; case 6: return E.rumble; case 7: return E.sub_am; case 8: return E.drift; case 9: return E.frisson;
     case 10: return (int)E.bar; case 11: return E.step; case 12: return E.sec; case 13: return E.key; case 14: return E.mode;
     case 15: return E.chord; case 16: return E.chord_q; case 17: return E.e; case 18: return E.bpm; case 19: return E.sec_bar;
-    case 20: return E.sec_len; case 21: return E.plan_at; case 22: return E.plan_n; default: return 0;
+    case 20: return E.sec_len; case 21: return E.plan_at; case 22: return E.plan_n; case 23: return E.tex; default: return 0;
     }
 }
 /* the brain's state */

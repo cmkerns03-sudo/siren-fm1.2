@@ -32,6 +32,8 @@ typedef struct {
     int16_t gain, verb, lp;           /* the master: gain, the reverb's share, its low-pass closed (per mille) */
     int16_t hiss, wind, wind_f, rumble, sub_am;   /* the textures (per mille): tape hiss, wind (and its colour), rumble;
                                                    * the sub's slow swell (0 none) */
+    int16_t tex;                      /* how much the textures may sound (per mille): as loud as the music is, so they
+                                       * come in with it at the start and go with it at the end (never alone) */
     int16_t drift;                    /* the whole piece's pitch drifting (1/4096 semitone) */
     /* what the screen shows */
     uint32_t bar; uint8_t step, sec, key, mode, chord, chord_q; int16_t e; uint8_t bpm, frisson;

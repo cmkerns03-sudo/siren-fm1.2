@@ -489,6 +489,14 @@ void ab_step16(ab_brain_t *b, ab_events_t *ev)
         ev->sub_am = (int16_t)(w == AW_DARK ? 450 : 0);
         if (sec == AS_VOID || b->faded) ev->hiss = ev->wind = ev->rumble = 0;
         if (sec == AS_BREATH) { ev->wind /= 3; ev->rumble /= 3; }
+        {   /* (never alone: as loud as the loudest layer, full once one is at its dawn's level, 300 per mille) */
+            int m = 0, x;
+            for (L = AL_DRONE; L <= AL_SWELL; L++) if (ev->lvl[L] > m) m = ev->lvl[L];
+            x = ab_clamp(m * 1000 / 300, 0, 1000);
+            ev->tex = (int16_t)(x * x / 1000);
+            ev->hiss = (int16_t)(ev->hiss * ev->tex / 1000); ev->wind = (int16_t)(ev->wind * ev->tex / 1000);
+            ev->rumble = (int16_t)(ev->rumble * ev->tex / 1000);
+        }
     }
     /* the pitch drift: a slow random walk (COSMIC a few cents, DARK more, CINEMATIC a tape's) */
     if (step == 0) {
