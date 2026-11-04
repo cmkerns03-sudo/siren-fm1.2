@@ -172,6 +172,7 @@ ABY="$CCS -O2 -w -DSIREN=1 -DABYSS=1 -DNVOICE=12 -I. -Ibuild/gen -Ifirmware/src 
 ABY_UB="$ABY -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all"
 $CCS -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -o "$OUT/abyss_brain" tests/abyss/brain_test.c
 run "ABYSS: the brain (three worlds, their plans, the notes in range, no overflow; sanitizers)" "$OUT/abyss_brain"
+run "ABYSS: the site's brain (WebAssembly) plays the FM-1's notes, event for event" sh tools/abyss/identity.sh "$OUT/abyss_brain" "$OUT"
 $ABY_UB -o "$OUT/abyss_host" tests/abyss/abyss_host.c -lm -lpthread
 run "ABYSS: every world through the firmware's audio path, a gesture in each (sanitizers)" sh -c 'for w in 0 1 2; do "$0" $w S1R-3N0$w 600 /dev/null 200 1 >/dev/null || exit 1; done' "$OUT/abyss_host"
 $ABY -o "$OUT/abyss_levels" tests/abyss/level_cal.c -lm -lpthread

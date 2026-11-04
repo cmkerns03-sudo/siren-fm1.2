@@ -182,7 +182,7 @@ static void ab_theme(ab_brain_t *b)
     for (i = 0; i < cell; i++) {                     /* the cell */
         cd[i] = (int8_t)d; cl[i] = AB_PICK(&r, DUR);
         if (i == leap) d += ab_chance(&r, 500) ? ab_range(&r, 3, 5) : -ab_range(&r, 3, 4);
-        else d += (ab_chance(&r, 550) ? -1 : 1) * (ab_chance(&r, 800) ? 1 : 2);
+        else { int sg = ab_chance(&r, 550) ? -1 : 1, st = ab_chance(&r, 800) ? 1 : 2; d += sg * st; }   /* (draws in order: the C and the web alike) */
         if (i == leap + 1 && i < cell) d += cd[i] > cd[i - 1] ? -1 : 1;   /* (the step back) */
         d = ab_clamp(d, -2, 7);
     }
@@ -633,7 +633,8 @@ void ab_step16(ab_brain_t *b, ab_events_t *ev)
             } else {                                            /* DARK: a low chant now and then */
                 if (step == 0 && pb % 8 == 0 && ab_chance(&r, 350 + dens / 4)) {
                     static const int8_t T[3] = {0, 7, 1};
-                    ab_add(ev, AL_MELO, AB_BASE[AL_MELO] - 12 + ab_mod(key + root, 12) + AB_PICK(&r, T), vel - 15, ab_range(&r, 32, 64));
+                    int t = AB_PICK(&r, T), len = ab_range(&r, 32, 64);
+                    ab_add(ev, AL_MELO, AB_BASE[AL_MELO] - 12 + ab_mod(key + root, 12) + t, vel - 15, len);
                 }
             }
         }
@@ -659,11 +660,13 @@ void ab_step16(ab_brain_t *b, ab_events_t *ev)
                     }
                 } else if (step % 4 == 0 && ab_chance(&r, 60 + dens / 8)) {
                     static const int8_t T[4] = {0, 7, 14, 19};
-                    ab_add(ev, AL_BELL, AB_BASE[AL_BELL] + 12 + ab_mod(key + root, 12) + AB_PICK(&r, T), 40 + (int)ab_ri(&r, 30), 8);
+                    int t = AB_PICK(&r, T), v = 40 + (int)ab_ri(&r, 30);
+                    ab_add(ev, AL_BELL, AB_BASE[AL_BELL] + 12 + ab_mod(key + root, 12) + t, v, 8);
                 }
             } else if (step == 0 && pb % 2 == 0 && ab_chance(&r, 120 + dens / 6)) {
                 static const int8_t T[4] = {0, 6, 1, 12};
-                ab_add(ev, AL_BELL, AB_BASE[AL_BELL] - 12 + ab_mod(key + root, 12) + AB_PICK(&r, T), 60 + (int)ab_ri(&r, 50), 32);
+                int t = AB_PICK(&r, T), v = 60 + (int)ab_ri(&r, 50);
+                ab_add(ev, AL_BELL, AB_BASE[AL_BELL] - 12 + ab_mod(key + root, 12) + t, v, 32);
             }
         }
         /* the swell: the new voice of the climax, wide; DARK the roughest */
