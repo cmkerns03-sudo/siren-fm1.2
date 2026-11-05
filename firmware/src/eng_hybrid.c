@@ -230,7 +230,9 @@ static void hy_filter(uint32_t type, const hsvf_t *c, const hsvf_t *c2, const la
     case HF_MOOG: hy_ladder(lc, x, n, st); break;
     case HF_LP12: hsvf_run(c, x, n, st, 0); break;
     case HF_LP24:
+#if !ABYSS                                           /* (ABYSS 0.1.4, lighter: the resonant stage alone, 12 dB) */
         hsvf_run(c2, x, n, st, 0);                   /* (the first stage flat, the resonance on the second) */
+#endif
         hsvf_run(c, x, n, st + 2, 0);
         break;
     case HF_BP: hsvf_run(c, x, n, st, 1); break;
@@ -427,14 +429,23 @@ static void hy_osc_run(const hy_osc_t *o, hy_voice_t *hv, uint32_t k, uint32_t i
                                                       * 0.7: on the stack, the voices render on two cores) */
         for (i = 0; i < n; i++)
             acc[i] = 0;
+#if ABYSS
+        for (j = 0; j < HY_SUPER - 1u; j += j == 2u ? 3u : 2u) {   /* (ABYSS 0.1.4, lighter: three side saws, the two
+                                                      * outer ones and one inside, x sqrt 2: as loud as the six) */
+#else
         for (j = 0; j < HY_SUPER - 1u; j++) {
+#endif
             uint32_t q = hv->sph[k][j], qi = sinc[j];
             for (i = 0; i < n; i++, q += qi)
                 acc[i] += hy_saw(q, qi);
             hv->sph[k][j] = q;
         }
         for (i = 0; i < n; i++, ph += inc)           /* (six saws at sg / 2 each: the sum stays in range) */
+#if ABYSS
+            y[i] = mulq15(hy_saw(ph, inc), cg) + mulq15((acc[i] * 181) >> 8, sg);
+#else
             y[i] = mulq15(hy_saw(ph, inc), cg) + mulq15(acc[i] >> 1, sg);
+#endif
         break;
     }
     case HO_FM: {                                    /* phase modulation by the buffer before, up to ~2 cycles */
