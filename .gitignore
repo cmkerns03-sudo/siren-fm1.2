@@ -1,3 +1,8 @@
 build/
 .DS_Store
 __pycache__/
+# host test outputs and binaries
+tests/siren/brain_c
+tests/siren/brain_san
+tests/siren/c.txt
+tests/siren/j.txt
