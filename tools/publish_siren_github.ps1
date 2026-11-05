@@ -107,7 +107,6 @@ if ($fw) { $assets += $fw.FullName }
 else { Write-Host "(No firmware built for ${Version}: run INSTALL-SIREN.bat first. The release is published without the .fwsc; run this script again afterwards to add it.)" -ForegroundColor Yellow }
 $video = @("SIREN-launch.mp4", "..\SLOOP\siren\fm1-$Version\video\SIREN-launch.mp4") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($video) { $assets += (Resolve-Path $video).Path }
-$pre = if ($Stable) { @("--latest") } else { @("--prerelease") }
 gh release view $Tag --repo $full *> $null
 if ($LASTEXITCODE -eq 0) {
   Step "The release $Tag exists: updating its notes and files"
@@ -116,8 +115,8 @@ if ($LASTEXITCODE -eq 0) {
   if ($assets.Count -gt 0) { gh release upload $Tag @assets --repo $full --clobber }
 } else {
   Step "Creating the release $Tag"
-  $title = if ($Stable) { "SIREN $Version" } else { "SIREN $Version (experimental)" }
-  gh release create $Tag @assets --repo $full @pre --title $title --notes-file $notes
+  if ($Stable) { gh release create $Tag @assets --repo $full --latest --title "SIREN $Version" --notes-file $notes }
+  else { gh release create $Tag @assets --repo $full --prerelease --title "SIREN $Version (experimental)" --notes-file $notes }
 }
 if ($LASTEXITCODE -ne 0) { Fail "the release $Tag" }
 
