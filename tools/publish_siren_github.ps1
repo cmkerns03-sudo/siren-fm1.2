@@ -104,7 +104,7 @@ $site = Join-Path "build" "siren-site"
 $assets = @()
 $fw = Get-ChildItem (Join-Path (Join-Path $site "firmware") "siren-$Version.fwsc") -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($fw) { $assets += $fw.FullName }
-else { Write-Host "(No firmware built for $Version: run INSTALL-SIREN.bat first. The release is published without the .fwsc; run this script again afterwards to add it.)" -ForegroundColor Yellow }
+else { Write-Host "(No firmware built for ${Version}: run INSTALL-SIREN.bat first. The release is published without the .fwsc; run this script again afterwards to add it.)" -ForegroundColor Yellow }
 $video = @("SIREN-launch.mp4", "..\SLOOP\siren\fm1-$Version\video\SIREN-launch.mp4") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($video) { $assets += (Resolve-Path $video).Path }
 $pre = if ($Stable) { @("--latest") } else { @("--prerelease") }
@@ -133,7 +133,7 @@ if (Test-Path (Join-Path (Join-Path (Join-Path $site "webapp") "installer") "ind
   git init --quiet
   git checkout --quiet -b gh-pages
   git add -A
-  git -c user.name="$Owner" -c user.email="$email" commit --quiet -m "SIREN $Version: the installer"
+  git -c user.name="$Owner" -c user.email="$email" commit --quiet -m "SIREN ${Version}: the installer"
   git push --force "https://github.com/$full.git" gh-pages
   $ok = $LASTEXITCODE -eq 0
   Pop-Location
