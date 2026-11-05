@@ -37,6 +37,7 @@ static double run(int e, int pre, int layer, double *worst, uint32_t *vmax)
     return ns / 1000.0 / (blocks - 101);
 }
 static const char *LN[] = {"DRUMS", "BASS", "ARP", "HOOK", "PAD", "STAB", "FX"};
+#ifndef SOUND_COST_NO_MAIN                       /* (sound_ir.c: run() alone) */
 int main(int argc, char **argv)
 {
     double w, idle = 1e9, hy = 1e9, m; uint32_t vm, s, L, r, st;
@@ -58,3 +59,4 @@ int main(int argc, char **argv)
     }
     return 0;
 }
+#endif

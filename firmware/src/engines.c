@@ -70,6 +70,9 @@ static uint32_t uni_turns(uint32_t r, int32_t p16, int32_t d16)
 #include "eng_vector.c"         /* VECTOR: vector synthesis (Clipper 0.8) */
 #if SIREN
 #include "eng_wob.c"            /* WOB: SIREN's dubstep bass */
+#if SIREN_OBV
+#include "eng_obv.c"            /* OBERVAVE: the community's OberVave voice (SIREN 0.9.1) */
+#endif
 #endif
 #endif
 
@@ -124,6 +127,9 @@ static const engine_t *const ENGINES[NENGINES] = {&ENG_ANALOG, &ENG_DIGITAL, &EN
                                                     &ENG_JUNO, &ENG_VECTOR,                /* 21, 22 */
 #if SIREN
                                                     &ENG_WOB,                              /* 23 (ENGI_WOB) */
+#if SIREN_OBV
+                                                    &ENG_OBV,                              /* 24 (ENGI_OBV) */
+#endif
 #endif
 #endif
 };

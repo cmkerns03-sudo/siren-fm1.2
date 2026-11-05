@@ -21,6 +21,8 @@ int main(int argc, char **argv)
     host_tracks_init();
     siren_init();
     siren_cmd(SC_STYLELOCK, 1, 0, 0);
+    if (getenv("ALL"))                                          /* (0.9.1) ALL SOUNDS: every bank */
+        siren_cmd(SC_ALLBANK, 1, 0, 0);
     siren_cmd(SC_SEED, style, 0, seed);
     siren_cmd(SC_PLAY, 0, 0, 0);
     song.playing = 1;

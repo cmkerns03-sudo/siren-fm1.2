@@ -56,7 +56,12 @@ static inline int voice_poly(int m) { return m == V_POLY || m >= V_PUNI2; }   /*
 #if FELUCCA_SLICE
 #error "SLICE is a groovebox engine (CLIPPER_SYNTH 0)"
 #endif
-#define CLIPPER_NENG (10 + SIREN) /* WAVE ACID STRINGS MACRO VPS TERRAIN FMX WSEQ JUNO VECTOR, SIREN's WOB */
+#if SIREN && !ABYSS
+#define SIREN_OBV 1              /* (SIREN 0.9.1) the community's OberVave voice (eng_obv.c); not ABYSS's */
+#else
+#define SIREN_OBV 0
+#endif
+#define CLIPPER_NENG (10 + SIREN + SIREN_OBV) /* WAVE ACID STRINGS MACRO VPS TERRAIN FMX WSEQ JUNO VECTOR, SIREN's WOB, OBERVAVE */
 #define NENGINES (13 + CLIPPER_NENG)
 #define ENGI_WAVE 13u            /* Clipper 0.2: wavetables (eng_wave.c) */
 #define ENGI_ACID 14u            /*   a 303-style bass line (eng_acid.c) */
@@ -69,6 +74,7 @@ static inline int voice_poly(int m) { return m == V_POLY || m >= V_PUNI2; }   /*
 #define ENGI_JUNO 21u            /* Clipper 0.8: the Juno poly and its chorus (eng_juno.c, fx.c juno_chorus) */
 #define ENGI_VECTOR 22u          /*   vector synthesis: four waves, a joystick (eng_vector.c, after the Prophet VS) */
 #define ENGI_WOB 23u             /* SIREN: the dubstep bass, its wobble from SIREN's brain (eng_wob.c) */
+#define ENGI_OBV 24u             /* SIREN 0.9.1: OberVave's voice (eng_obv.c, zvenson's, GPL-3.0) */
 #else
 #define NENGINES (13 + FELUCCA_SLICE)
 #endif

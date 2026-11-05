@@ -462,7 +462,7 @@ static void su_foot(void)
     uint32_t q = (uint32_t)song.cpu_q8 * 100u >> 8, fx = su.px_key >= 0;
     su_s_t nx = {{0}, 0};
     static const char *const HM[SP_N] = {"", "HOLD A KEY: ITS EFFECT", "1-8 THE STYLE  16 KEEP IT", "THE TRACK'S FORM",
-                                         "KNOBS: THE LAYER'S STRIP", "16 SEEDS", "SIREN 0.9"};
+                                         "KNOBS: THE LAYER'S STRIP", "16 SEEDS", "SIREN 0.9.1"};
     su_s_t hm = {{0}, 0};
     const char *m;
     if (su.info == SP_HOME) {                                            /* (0.8) the deck: the keyboard, the layer in the hands */

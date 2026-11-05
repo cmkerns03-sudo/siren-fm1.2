@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """SIREN's data for the firmware -> build/gen/siren_data.h:
   the selection of sounds per style and layer (tools/siren/curation.json, the prototype's workshop export: the FM-1's
-  own sounds only (Clipper's and SIREN's WOB; the community's need their modules), and WAVE only on the bass: the
+  own sounds (Clipper's, SIREN's WOB and, since 0.9.1, the community's OberVave voice: eng_obv.c), and WAVE only on the bass: the
   firmware keeps one wavetable in RAM), by engine and preset name (siren.c finds them at power-on);
   the drum kits (tools/siren/kits.json, tools/siren_kits.py on the prototype): 16 sounds each, the drum synth's bytes.
 
@@ -20,7 +20,8 @@ lev = json.loads((D / 'levels.json').read_text()) if (D / 'levels.json').exists(
 trims, tones = [], []
 # (0.2) the engines a set can afford on the FM-1, six parts at once: no GRAIN, VPS, MACRO, VECTOR, STRINGS, TERRAIN, PHYS,
 # SAMPLE, FM6 (its patch waits for the main loop's fm6_poll, Clipper's screen) or WAVE (one table in RAM)
-LIGHT = {'ANALOG', 'ACID', 'TRIO', 'DIGITAL', 'PHASE', 'LOFI', 'NOISE', 'WHEEL', 'HYBRID', 'JUNO', 'WSEQ', 'FMX', 'VOICE', 'WOB'}
+LIGHT = {'ANALOG', 'ACID', 'TRIO', 'DIGITAL', 'PHASE', 'LOFI', 'NOISE', 'WHEEL', 'HYBRID', 'JUNO', 'WSEQ', 'FMX', 'VOICE', 'WOB',
+         'OBERVAVE'}   # (0.9.1) the community's OberVave voice (eng_obv.c)
 def fm1(k, L):
     if '/' in k and not k.startswith('siren/'): return False
     eng = (k.split('/', 1)[1] if '/' in k else k).split(':', 1)[0]

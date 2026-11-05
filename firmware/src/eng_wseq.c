@@ -101,6 +101,7 @@ static void wseq_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     uint32_t pa = v->ph[0], pb = v->ph[1], ia, ib, rnd = (uint32_t)v->s[4], p0 = (uint32_t)v->s[6];
     int hia, hib;
     tsvf_t flt;
+    len >>= VH;                                      /* (SIREN 0.9.1: at half the rate, half the samples a step) */
     if (len < 64u)
         len = 64u;
     xf = len * (uint32_t)clamp(p[P_E2], 0, 127) / 128u;
