@@ -139,6 +139,23 @@ static int cpu1_run(cpu1_job_t fn, uint32_t arg)
     return 1;
 }
 
+/* (SIREN 0.9) done yet? Inline (CORES=1): never before the wait (the job runs there); a lost job: yes (the wait
+ * says so); the thread: its flag */
+static int cpu1_poll(void)
+{
+    int d;
+    if (!c1h.pending)
+        return 1;
+    if (c1h.timeout_at && c1h.jobs == c1h.timeout_at)
+        return 1;
+    if (c1h.mode != 2)
+        return 0;
+    pthread_mutex_lock(&c1h.mu);
+    d = c1h.done;
+    pthread_mutex_unlock(&c1h.mu);
+    return d;
+}
+
 static int cpu1_wait(void)
 {
     if (!c1h.pending)

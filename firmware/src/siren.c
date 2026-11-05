@@ -22,6 +22,19 @@ static const int8_t SIREN_MIX[6][4] = {
     {100, 16, 25, 38},   /* STAB */
     {95, 0, 0, 57},      /* FX */
 };
+/* (0.9) the riser's kinds (siren_rise, below): the FX layer's sounds */
+enum { RS_AIR, RS_UPLIFT, RS_SHIMMER, RS_SWEEP, RS_WASH, RS_N };
+static const char *const RS_NAME[RS_N] = {"AIR RISE", "UPLIFTER", "SHIMMER UP", "SAW SWEEP", "WASH RISE"};
+static const struct { int16_t ng; uint8_t ntop, tone; int16_t tg; uint8_t rev; } RS_K[RS_N] = {
+    /* the noise's level (Q15), its low-pass at the top (SVF index: 112 ~ 7.6 kHz, 100 ~ 4.6 kHz), the tone (0 none, 1 saws,
+     * 2 sines), its level (Q15), the reverb send at the top (the breath tilted down first: soft, never a hiss) */
+    {32767, 110, 0, 0, 72}, {17000, 106, 1, 15000, 60}, {15000, 108, 2, 22000, 84}, {6000, 100, 1, 21000, 56},
+    {30000, 98, 0, 0, 100},
+};
+static const uint8_t RS_STYLE[SB_NSTYLES][3] = {
+    {RS_AIR, RS_SWEEP, RS_WASH}, {RS_UPLIFT, RS_SHIMMER, RS_AIR}, {RS_SWEEP, RS_UPLIFT, RS_AIR}, {RS_SWEEP, RS_AIR, RS_WASH},
+    {RS_UPLIFT, RS_AIR, RS_SWEEP}, {RS_UPLIFT, RS_SWEEP, RS_AIR}, {RS_AIR, RS_WASH, RS_SHIMMER}, {RS_AIR, RS_SHIMMER, RS_WASH},
+};
 /* each style's drums: level (x/100), reverb send, delay send (the drum track's), the rumble */
 static const uint8_t SIREN_DMIX[SB_NSTYLES][3] = {
     {100, 12, 6}, {100, 30, 8}, {95, 12, 12}, {100, 8, 4}, {100, 16, 6}, {100, 18, 6}, {100, 14, 6}, {100, 22, 8},   /* (.. DNB, HOUSE) */
@@ -51,6 +64,9 @@ static struct {
     int16_t ap_kick; uint16_t ap_kn16;
     uint8_t mute[8];
     int16_t sound_eng[SB_NLAYERS], sound_pre[SB_NLAYERS];   /* (the screen: what plays) */
+    /* (0.9) the sounds of every style's bank, for any layer: ALL (the brain picks from all of them, not the style's own),
+     * how many each layer has in all (siren_ext_at), the bank a layer's sound comes from (the screen: another style's) */
+    uint8_t allbank, nall[SB_NLAYERS]; int8_t sound_from[SB_NLAYERS];
     /* (0.2) the CPU guard: 0 the set as written; 1 pads and stabs two notes; 2 the FX layer out, the pad its root, the
      * arp in eighths. From the audio interrupt's own load (audio.c song.cpu_q8), with a hold (the hysteresis) */
     uint8_t lean; uint16_t lean_hold; uint16_t cpu_test;
@@ -65,6 +81,11 @@ static struct {
     int8_t eqk[3];                               /* the isolator: the master EQ's bands (bus.c, 12 flat .. 0 -12 dB) */
     int32_t spd_q12, bend, gate_q12;             /* the clock's speed (BRAKE, HALF), the parts' pitch, the gate */
     int32_t nz, nz1, nz2, nz_lvl;        /* the riser's noise */
+    /* (0.9) the riser (siren_rise): the FX layer's own sound, not a voice: its kind (RS_*), on, the units into it and its
+     * length, its note, the fall after it (units into it; 0 none); the noise's two streams, the filters' states (noise
+     * and tone, left and right), the oscillators', the tremolo's; its level and the fall's, gliding */
+    uint8_t rs_kind, rs_on, rs_sec; uint32_t rs_t, rs_len, rs_d; uint8_t rs_note;
+    int32_t rs_n[2]; uint32_t rs_ph[3], rs_tph; int32_t rs_lp[2][2], rs_hp[2], rs_pk[2], rs_tl[2][2], rs_g, rs_tg;
     volatile int8_t q_style; uint8_t q_now;      /* (0.3) the style asked for, on the next phrase (-1 none); now */
     /* (0.5) the mixer: the master filter (K1, -63 low-pass .. 63 high-pass), the space (K3, % of the sends); each
      * layer's volume (P_LEVEL steps, 2 a dB), filter (-63..63), space (%); each sound's own trim and tone (its
@@ -81,7 +102,8 @@ static struct {
 } sr;
 enum { SC_PLAY, SC_STOP, SC_KNOB, SC_DIVE, SC_BREAK, SC_STYLE, SC_SEED, SC_REROLL, SC_LOCK, SC_STYLELOCK, SC_PUNCH, SC_STYLEQ,
        SC_DROP, SC_FILL, SC_REMOTIF, SC_KEYUP, SC_NEXT, SC_STAY, SC_SOUND, SC_MIX,     /* (0.5) the black keys, the mixer */
-       SC_LIVE, SC_LIVEOFF, SC_LARP };   /* (0.8) the keyboard: a key (its notes), the layers given back, the arpeggiator */
+       SC_LIVE, SC_LIVEOFF, SC_LARP,      /* (0.8) the keyboard: a key (its notes), the layers given back, the arpeggiator */
+       SC_ALLBANK };                      /* (0.9) ALL: the brain picks from every style's sounds (a 1, 0 the style's) */
 enum { SM_FILT, SM_SPACE, SM_FOCUS, SM_LVOL = 10, SM_LFLT = 20, SM_LSPACE = 30 };  /* SC_MIX's targets (+ the layer) */
 
 /* the main loop's way into the brain */
@@ -94,9 +116,11 @@ static void siren_cmd(uint32_t op, int32_t a, int32_t b, uint32_t c)
     RING_PUBLISH();
     sr.cw = w + 1u;
 }
+static void siren_rise_end(void);
 static void siren_all_off(void)
 {
     uint32_t i;
+    siren_rise_end();                                /* (0.9: the riser falls) */
     for (i = 0; i < sr.noff; i++)
         if (sr.off[i].trk < NPART)               /* (not the sub's 0xFF, not the drums) */
             trk_note_off1(&trk[sr.off[i].trk], sr.off[i].note);
@@ -258,6 +282,69 @@ static void siren_px_block(uint32_t adv)
 static int32_t siren_bend(void) { return sr.bend; }                /* (voice.c: 1/4096 semitone on every part) */
 static int32_t siren_eq_db(uint32_t band) { return sr.eqk[band % 3u]; }   /* (bus.c) */
 
+/* ---- (0.9) every style's sounds for a layer, as one list: the style's own first (as before), then the others' (each
+ * sound once, in the styles' order): k -> its place in SD_LIST (siren_data.h; its calibration there: SD_TRIM, SD_TONE,
+ * a sound's the same in any style's list, levels.json is per layer). The FX layer: the riser's kinds (RS_*) */
+static int siren_in_span(const sd_span_t *sp, uint16_t snd)
+{
+    uint32_t i;
+    for (i = 0; i < sp->n; i++)
+        if (SD_LIST[sp->first + i] == snd) return 1;
+    return 0;
+}
+static int32_t siren_ext_at(uint32_t style, uint32_t L, uint32_t k, int8_t *from)
+{
+    const sd_span_t *own = &SD_CUR[style % SB_NSTYLES][L];
+    uint32_t s, i, j;
+    if (k < own->n) { *from = (int8_t)style; return (int32_t)(own->first + k); }
+    k -= own->n;
+    for (s = 0; s < SB_NSTYLES; s++) {
+        const sd_span_t *sp = &SD_CUR[s][L];
+        if (s == style % SB_NSTYLES) continue;
+        for (i = 0; i < sp->n; i++) {
+            uint16_t snd = SD_LIST[sp->first + i];
+            int seen = siren_in_span(own, snd);
+            for (j = 0; j < s && !seen; j++)        /* (once: not if an earlier style had it) */
+                if (j != style % SB_NSTYLES && siren_in_span(&SD_CUR[j][L], snd)) seen = 1;
+            if (seen) continue;
+            if (!k--) { *from = (int8_t)s; return (int32_t)(sp->first + i); }
+        }
+    }
+    *from = (int8_t)style;
+    return own->n ? (int32_t)own->first : -1;
+}
+static uint32_t siren_count_all(uint32_t L)
+{
+    uint32_t s, i, j, k = 0;
+    for (s = 0; s < SB_NSTYLES; s++) {
+        const sd_span_t *sp = &SD_CUR[s][L];
+        for (i = 0; i < sp->n; i++) {
+            int seen = 0;
+            for (j = 0; j < s && !seen; j++) seen = siren_in_span(&SD_CUR[j][L], SD_LIST[sp->first + i]);
+            k += !seen;
+        }
+    }
+    return k;
+}
+/* the riser's kinds the same way: the style's three, then the others */
+static uint32_t siren_rs_kind(uint32_t style, uint32_t k)
+{
+    const uint8_t *own = RS_STYLE[style % SB_NSTYLES];
+    uint32_t q;
+    if (k < 3u) return own[k];
+    k -= 3u;
+    for (q = 0; q < RS_N; q++)
+        if (q != own[0] && q != own[1] && q != own[2] && !k--) return q;
+    return own[0];
+}
+static void siren_palette(void)                      /* the brain's choice: the style's sounds, or all (ALL) */
+{
+    uint32_t s, L;
+    for (s = 0; s < SB_NSTYLES; s++)
+        for (L = 0; L < SB_NLAYERS; L++)
+            sb_pal.ncur[s][L] = L == L_FX ? (sr.allbank ? RS_N : 3) :
+                                L >= L_BASS && L < L_FX ? (sr.allbank ? sr.nall[L] : SD_CUR[s][L].n) : 0;
+}
 /* (0.5) PRESETS turned on a layer: the next or previous sound of the style's selection for it (a kit for the drums),
  * kept from then on (the layer locked: the brain's next tracks leave it) */
 static void siren_sound_step(int32_t L, int32_t d)
@@ -271,7 +358,7 @@ static void siren_sound_step(int32_t L, int32_t d)
         if (n) { sb.kit_pick = (uint32_t)((sb.snd[L_DRUMS] + d % n + n) % n); sb_pick_sounds(&sb); }
         return;
     }
-    n = p->ncur[sb.style][L];
+    n = L == L_FX ? RS_N : sr.nall[L];               /* (0.9) every style's sounds for it, the style's own first */
     if (n < 1)
         return;
     sb.snd[L] = (int16_t)((sb.snd[L] + d % n + n) % n);
@@ -377,6 +464,7 @@ static void siren_commands(void)                 /* (audio interrupt) */
         case SC_LIVE: siren_live((uint32_t)a, (uint32_t)b, sr.cmd[i].c); break;
         case SC_LIVEOFF: siren_live_off((uint32_t)a); break;
         case SC_LARP: siren_larp((uint32_t)a); break;
+        case SC_ALLBANK: sr.allbank = (uint8_t)(a != 0); siren_palette(); break;   /* (the next pick, the next track's) */
         }
         sr.cr++;
     }
@@ -400,6 +488,103 @@ static void siren_wobble(uint32_t adv)
 }
 
 /* one note into its part (tr: semitones up, the pitch roll), its end len units on */
+/* ---- (0.9) the riser: the FX layer's own sound (no voice, no NOISE preset: those hissed and crackled). A build's long
+ * note starts it: a breath of noise, two streams (left, right) through a high-pass and a low-pass that open together
+ * (the top at ~6..9 kHz, never the fizz above), louder as the square of the way in; with it, for some kinds, a tone: three
+ * oscillators (a fifth, a hair apart) climbing an octave to the note, their own low-pass opening (UPLIFT: saws; SHIMMER:
+ * sines, a tremolo quickening; SWEEP: the saws, little breath). Into the reverb more as it climbs. When the build ends
+ * (the drop) it falls: the breath's filter closing, the tone an octave down, fading over two bars. The style's own kinds
+ * are the FX layer's sounds (PRESET), every kind in ALL; its strip (volume, filter, space, mute) as any layer's. The
+ * DJ's RISER (the FX key) is the same breath */
+#define RS_FALL (8u * BEAT_U)                        /* the fall: two bars */
+static void siren_rise_start(uint32_t note, uint32_t len)
+{
+    sr.rs_on = 1; sr.rs_t = 0; sr.rs_len = len ? len : 1u; sr.rs_d = 0; sr.rs_note = (uint8_t)note; sr.rs_sec = sr.ev.sec;
+}
+static void siren_rise_end(void) { if (sr.rs_on) { sr.rs_on = 0; sr.rs_d = 1; } }   /* (its fall) */
+static void siren_rise_clock(uint32_t adv)           /* (siren_block) */
+{
+    if (sr.rs_on && (sr.rs_t += adv) >= sr.rs_len)
+        siren_rise_end();
+    if (sr.rs_d && (sr.rs_d += adv) >= RS_FALL)
+        sr.rs_d = 0;
+}
+/* an SVF index (0..127, SVF_G's) -> a one-pole TPT gain G = g / (1 + g), Q12 */
+static int32_t siren_g1(int32_t idx) { int32_t g = SVF_G[sb_clamp(idx, 0, 127)]; return (g << 12) / (4096 + g); }
+static void siren_rise(int32_t *l, int32_t *r, uint32_t n)
+{
+    int32_t px = sr.px == SPX_RISER ? sr.nz_lvl : 0, p, nl, tl, top, hpi, lpi, tlpi, semi, lv, f, rev, dg, dtg, gn, gt;
+    uint32_t i, k, c, kind = px ? (uint32_t)RS_AIR : sr.rs_kind % RS_N, inc[3];
+    tsvf_t cn, ct;
+    int32_t G;
+    if (!sr.rs_on && !sr.rs_d && !px && !sr.rs_g && !sr.rs_tg)
+        return;
+    top = RS_K[kind].ntop;
+    f = sr.lflt[L_FX];                              /* (the strip's filter: left closes the top, right opens the bottom) */
+    if (px) {                                       /* the DJ's: its own climb */
+        p = px, nl = (int32_t)(((int64_t)p * p) >> 15), tl = 0;
+    } else if (sr.rs_on) {
+        p = (int32_t)(sr.rs_t / ((sr.rs_len >> 15) + 1u)); p = p > 32767 ? 32767 : p;   /* (32 bits: no 64-bit divide) */
+        nl = (int32_t)(((int64_t)p * p) >> 15);
+        tl = (p + nl) >> 1;
+    } else if (sr.rs_d) {                           /* the fall: back from the top */
+        int32_t d = (int32_t)(sr.rs_d / ((RS_FALL >> 15) + 1u)), u;
+        d = d > 32767 ? 32767 : d, u = 32767 - d;
+        p = 32767 - (d >> 1);
+        nl = (int32_t)(((((int64_t)u * u) >> 15) * u) >> 15);
+        tl = (int32_t)(((int64_t)nl * u) >> 15);
+    } else
+        p = 0, nl = 0, tl = 0;
+    if (sr.mute[L_FX] || sr.lean >= 2u)
+        nl = 0, tl = 0;                             /* (muted, or the guard's level 2: silent; the arrangement let it start) */
+    lpi = 44 + (int32_t)(((top - 44) * (int64_t)p) >> 15) + (f < 0 ? f / 2 : 0);
+    hpi = 16 + (int32_t)((44 * (int64_t)p) >> 15) + (f > 0 ? f / 2 : 0) - (kind == RS_WASH ? 10 : 0);
+    tlpi = 50 + (int32_t)(((96 - 50) * (int64_t)p) >> 15) + (f < 0 ? f / 2 : 0);   /* (the tone's top ~4 kHz: warm, never a fizz) */
+    tsvf_coef_fs(&cn, sb_clamp(lpi, 0, 120) << 8, 12);
+    tsvf_coef_fs(&ct, sb_clamp(tlpi, 0, 118) << 8, 20);
+    G = siren_g1(hpi);
+    lv = LEVEL_Q12[sb_clamp(SIREN_MIX[L_FX - 1u][0] + sr.lvol[L_FX], 1, 127)];   /* (Q12: the layer's level) */
+    gn = (int32_t)(((int64_t)nl * RS_K[kind].ng) >> 15), gt = (int32_t)(((int64_t)tl * RS_K[kind].tg) >> 15);
+    dg = (gn - sr.rs_g) >> CTL_LOG2, dtg = (gt - sr.rs_tg) >> CTL_LOG2;
+    rev = (int32_t)RS_K[kind].rev * (300 + (p >> 6)) / 812 * (int32_t)sr.lspace[L_FX] / 100 * (int32_t)sr.space / 100;   /* (more as it climbs) */
+    semi = ((int32_t)sr.rs_note - 12) * 16 + (int32_t)((192 * (int64_t)((p + (int32_t)(((int64_t)p * p) >> 15)) >> 1)) >> 15);   /* (an octave up to the note) */
+    for (k = 0; k < 3u; k++)
+        inc[k] = pitch_inc_fs((uint32_t)sb_clamp(semi + (k == 0 ? -1 : k == 1 ? 1 : 7 * 16), 0, 2047));
+    for (i = 0; i < n; i++) {
+        int32_t yl, yr, a, w[2], o[3], trem = 32767;
+        sr.rs_g += dg, sr.rs_tg += dtg;
+        for (c = 0; c < 2u; c++) {                  /* the breath: tilted (a one-pole at ~700 Hz, x 2, and a little of
+                                                     * the white: -6 dB an octave above), high-pass (a one-pole off), low-pass */
+            int32_t x = (int32_t)(noise32(&sr.rs_n[c]) >> 17), v, lo;
+            sr.rs_pk[c] += ((x - sr.rs_pk[c]) * 410) >> 12;
+            x = sr.rs_pk[c] * 2 + (x >> 3);
+            v = ((x - sr.rs_hp[c]) * G) >> 12, lo = sr.rs_hp[c] + v;
+            sr.rs_hp[c] = lo + v;
+            w[c] = tsvf_lp(&cn, x - lo, &sr.rs_lp[c][0], &sr.rs_lp[c][1]);
+        }
+        yl = mulq15(w[0], sr.rs_g), yr = mulq15(w[1], sr.rs_g);
+        if (RS_K[kind].tone && sr.rs_tg > 0) {      /* the tone: three oscillators, a fifth, a hair apart */
+            for (k = 0; k < 3u; k++) {
+                o[k] = RS_K[kind].tone == 1 ? osc_saw(sr.rs_ph[k], inc[k]) : osc_sine(sr.rs_ph[k]);
+                sr.rs_ph[k] += inc[k];
+            }
+            if (RS_K[kind].tone == 2) {             /* SHIMMER: the tremolo, 4 .. 14 Hz */
+                sr.rs_tph += 389564u + (uint32_t)((973910u * (int64_t)p) >> 15);
+                trem = 22000 + (osc_sine(sr.rs_tph) * 10000 >> 15);
+            }
+            a = tsvf_lp(&ct, (o[0] + (o[2] >> 1)) >> 2, &sr.rs_tl[0][0], &sr.rs_tl[0][1]);
+            yl += mulq15(mulq15(a, sr.rs_tg), trem);
+            a = tsvf_lp(&ct, (o[1] + (o[2] >> 1)) >> 2, &sr.rs_tl[1][0], &sr.rs_tl[1][1]);
+            yr += mulq15(mulq15(a, sr.rs_tg), trem);
+        }
+        yl = (yl * lv) >> 10, yr = (yr * lv) >> 10;   /* (x 4 the layer's level: at its top as loud as the FX
+                                                     * layer's sounds were all along) */
+        l[i] += yl, r[i] += yr;
+        send_r[i] += mulq15((yl + yr) >> 1, rev * 258);
+    }
+    sr.rs_g = gn, sr.rs_tg = gt;
+}
+
 static void siren_play(const sb_note_t *x, int tr, uint32_t len)
 {
     uint32_t n = (uint32_t)sb_clamp((int)x->note + (x->layer == L_DRUMS ? 0 : tr), 0, 127), tk = 0xFFu, k;
@@ -409,6 +594,11 @@ static void siren_play(const sb_note_t *x, int tr, uint32_t len)
     if (x->layer == L_DRUMS) {
         trk_note_on1(TDRUM, x->note, x->vel);
         if (x->note == 36u) sr.kicks++;
+        return;
+    }
+    if (x->layer == L_FX) {                          /* (0.9) the riser: its own sound, as long as the note */
+        siren_rise_start(n, len);
+        { uint32_t q = sr.notes_n % 16u; sr.notes_l[q] = x->layer; sr.notes_k[q] = (uint8_t)n; sr.notes_n++; }
         return;
     }
     if (x->layer == L_SUB) {
@@ -576,6 +766,8 @@ static void siren_fire(void)
         if (ev->notes[i].layer < 7u) sr.last_note[ev->notes[i].layer] = s + 1u;
     if (ev->step == 0 || !sr.allowed)
         siren_arrange(ev->sec, s);
+    if (sr.rs_on && ev->sec != sr.rs_sec)            /* (0.9) the build over sooner (DROP): the riser falls now */
+        siren_rise_end();
     if (sr.fill_req && ev->step == 8) { sr.fill_req = 0; sr.fill_on = 1; }
     song.g[G_BPM] = ev->bpm;
     {   /* (0.4) the CPU guard: the real load of every half buffer since the last sixteenth (audio.c, %), the worst and
@@ -685,6 +877,7 @@ static void siren_block(uint32_t n, uint32_t adv)
             if (sr.r_on) siren_replay(0, 1, BEAT_U / 4u);
         }
     }
+    siren_rise_clock(adv);                                         /* (0.9) the riser's climb and fall */
     siren_px_block(real);                                          /* (its own time: the brake runs out) */
     siren_wobble(adv);
 }
@@ -693,7 +886,8 @@ static void siren_block(uint32_t n, uint32_t adv)
 static void siren_mix(int32_t *l, int32_t *r, uint32_t n)
 {
     uint32_t i;
-    if (sr.nz_lvl) {                                 /* (0.2) RISER, REWIND: noise, its colour rising with its level */
+    siren_rise(l, r, n);                             /* (0.9) the riser (and the DJ's RISER) */
+    if (sr.nz_lvl && sr.px != SPX_RISER) {          /* (0.2) REWIND: noise, its colour rising with its level */
         int32_t k = 2000 + (sr.nz_lvl >> 2);
         for (i = 0; i < n; i++) {
             int32_t w = (int32_t)(noise32(&sr.nz) >> 17) - 16384, y;
@@ -765,11 +959,21 @@ static void siren_service(void)
     int style = sb.style;
     for (L = L_BASS; L <= L_FX; L++) {
         int16_t want = sb.snd[L];
-        const sd_span_t *sp = &SD_CUR[style][L];
-        if (want < 0 || !sp->n || (want == sr.applied[L] && style == sr.applied_style[L]))
+        int8_t from = (int8_t)style;
+        int32_t at0;
+        if (want < 0 || (want == sr.applied[L] && style == sr.applied_style[L]))
+            continue;
+        if (L == L_FX) {                             /* (0.9) the riser: a kind, no voice to load */
+            sr.rs_kind = (uint8_t)siren_rs_kind((uint32_t)style, (uint32_t)want % RS_N);
+            sr.applied[L] = want; sr.applied_style[L] = (int16_t)style;
+            sr.sound_eng[L] = -1; sr.sound_from[L] = (int8_t)style;
+            continue;
+        }
+        at0 = siren_ext_at((uint32_t)style, L, (uint32_t)want % (sr.nall[L] ? sr.nall[L] : 1u), &from);
+        if (at0 < 0)
             continue;
         {
-            uint32_t at = sp->first + (uint32_t)want % sp->n;
+            uint32_t at = (uint32_t)at0;
             const sd_snd_t *s = &SD_SND[SD_LIST[at]];
             int16_t pe, e = siren_find(s, &pe);
             track_t *t = SIREN_PART(L);
@@ -783,7 +987,7 @@ static void siren_service(void)
             t->p[P_LEVEL] = siren_level(L); t->p[P_PAN] = SIREN_MIX[L - 1][1];
             t->p[P_DLY] = SIREN_MIX[L - 1][2]; t->p[P_REV] = SIREN_MIX[L - 1][3]; t->p[P_CHOR] = 0;
             t->p[P_AMODE] = 0;                   /* (the brain is the arpeggiator: a preset's arp off) */
-            sr.sound_eng[L] = e; sr.sound_pre[L] = pe;
+            sr.sound_eng[L] = e; sr.sound_pre[L] = pe; sr.sound_from[L] = from;
             break;                               /* (0.2) one sound a call: a new track's six fades not all at once */
         }
     }
@@ -796,9 +1000,11 @@ static void siren_service(void)
 static void siren_init(void)
 {
     uint32_t s, L, i;
+    for (L = L_BASS; L < L_FX; L++)
+        sr.nall[L] = (uint8_t)siren_count_all(L);  /* (0.9) every style's sounds for the layer */
+    sr.nall[L_FX] = RS_N;
+    siren_palette();
     for (s = 0; s < SB_NSTYLES; s++) {
-        for (L = 0; L < SB_NLAYERS; L++)
-            sb_pal.ncur[s][L] = L >= L_BASS && L <= L_FX ? SD_CUR[s][L].n : 0;
         sb_pal.nkits[s] = SD_KIT_N[s];
         sb_pal.kit_first[s] = SD_KIT_FIRST[s];
     }
@@ -807,6 +1013,7 @@ static void siren_init(void)
     for (i = 0; i < 7u; i++) sr.applied[i] = -1, sr.applied_style[i] = -1;
     sr.ap_kick = -1; sr.gain_q12 = 4096;
     sr.spd_q12 = 4096; sr.gate_q12 = 4096; sr.eqk[0] = sr.eqk[1] = sr.eqk[2] = 12; sr.nz = 0x5EED; sr.px = SPX_NONE; sr.q_style = -1;
+    sr.rs_n[0] = 0x2468ACEu; sr.rs_n[1] = 0x13579BDu;   /* (0.9: the riser's two noise streams) */
     sr.space = 100;
     for (i = 0; i < 7u; i++) sr.lspace[i] = 100;
     for (i = 0; i < NTRK; i++) {

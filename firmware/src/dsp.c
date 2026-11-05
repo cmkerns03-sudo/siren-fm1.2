@@ -6,8 +6,8 @@
 #define VOICE_FS 24000           /* per-voice level: one voice peaks near -6 dBFS before the master */
 
 static inline int32_t mulq15(int32_t a, int32_t b) { return (a * b) >> 15; }
-#if ABYSS
-/* (ABYSS 0.1.5) the slow layers' voices at half the rate (22.05 kHz; voice.c track_render, fx.c abyss_up): while a part
+#if SIREN
+/* (ABYSS 0.1.5, SIREN 0.9: its pads) the slow layers' voices at half the rate (22.05 kHz; voice.c track_render, fx.c abyss_up): while a part
  * renders them, v_half is 1 (on the core that renders them, and on core 1 for its share: fx.c keeps the master's tail
  * off core 1 meanwhile): the oscillators' increments doubled (pitch_inc), the filters' gains for the same cutoffs at the
  * lower rate (SVF_GV: g' = tan 2 theta, up to the table's top, 8 kHz there), the amplitude ramps over CTL / 2 */
@@ -24,6 +24,7 @@ static void svf_gh_init(void)
 }
 #define SVF_GV (v_half ? svf_gh : SVF_G)
 static inline uint32_t pitch_inc_v(uint32_t p) { return pitch_inc(p) << v_half; }
+static inline uint32_t pitch_inc_fs(uint32_t p) { return pitch_inc(p); }   /* (the drums: core 1's, always the full rate) */
 #define pitch_inc pitch_inc_v
 #define V_LOG2 (CTL_LOG2 - v_half)
 #define VH v_half
@@ -31,6 +32,7 @@ static inline uint32_t pitch_inc_v(uint32_t p) { return pitch_inc(p) << v_half; 
 #define SVF_GV SVF_G
 #define V_LOG2 CTL_LOG2
 #define VH 0u
+#define pitch_inc_fs pitch_inc
 #endif
 /* a * k / 65536 without 64-bit: a up to 2^31, k Q16 */
 static inline int32_t mulq16(int32_t a, uint32_t k)

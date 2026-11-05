@@ -1,0 +1,370 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     SIREN's installer (SIREN 0.9): the same install path as Clipper's (web/index_pkg.html: fm1pkg.js, fm1ota.js),
+     in SIREN's colours, in three steps a person can follow from across the room: big text, one thing at a time. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--PWA--><link rel="manifest" href="../clipper.webmanifest"><meta name="theme-color" content="#06070a"><link rel="icon" href="../icon-192.png"><!--/PWA-->
+<title>SIREN installer</title>
+<style>
+  :root { --bg: #06070a; --panel: #12141a; --panel2: #1a1d25; --line: #262a34; --fg: #f2f2f4; --dim: #aab0be; --faint: #6b7180;
+          --acc: #ff621a; --ok: #1ecc70; --blue: #287cff; --yellow: #ffc618; --red: #ff3a3a; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 18px/1.55 "Helvetica Neue", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 28px 18px 56px; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .logo svg { display: block; width: 240px; height: auto; }
+  .langs { display: flex; gap: 6px; }
+  .langs button { font-family: inherit; font-size: 16px; font-weight: 700; line-height: 1; color: var(--dim); background: var(--panel); border: 1px solid var(--line);
+                  padding: 9px 12px; border-radius: 8px; cursor: pointer; }
+  .langs button[aria-pressed="true"] { color: var(--bg); background: var(--fg); border-color: var(--fg); }
+  .strip { display: flex; height: 5px; margin: 18px 0 26px; border-radius: 3px; overflow: hidden; }
+  .strip i { flex: 1; } .strip i:nth-child(1) { background: var(--blue); } .strip i:nth-child(2) { background: var(--ok); }
+  .strip i:nth-child(3) { background: var(--yellow); } .strip i:nth-child(4) { background: var(--acc); }
+  .tag { font-size: 15px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--acc); margin: 0 0 6px; }
+  .lead { font-size: 25px; line-height: 1.3; font-weight: 600; margin: 0 0 10px; }
+  .sub { font-size: 18px; color: var(--dim); margin: 0 0 26px; }
+  .exp { border-left: 5px solid var(--yellow); background: var(--panel); padding: 14px 18px; margin: 0 0 26px; border-radius: 6px; }
+  .exp b { color: var(--yellow); letter-spacing: .08em; display: block; margin-bottom: 4px; font-size: 16px; }
+  .exp p { margin: 0; color: var(--fg); }
+  /* the three steps: the one to do now lit, the done ones ticked */
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+  .step { background: var(--panel); border: 2px solid var(--line); border-radius: 14px; padding: 18px 20px 20px; }
+  .step.now { border-color: var(--acc); box-shadow: 0 0 0 4px rgba(255, 98, 26, .14); }
+  .step.done { border-color: var(--ok); }
+  .step h2 { display: flex; align-items: center; gap: 14px; margin: 0 0 8px; font-size: 24px; line-height: 1.2; }
+  .num { flex: none; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; font-weight: 800;
+         background: var(--panel2); color: var(--dim); }
+  .now .num { background: var(--acc); color: #000; }
+  .done .num { background: var(--ok); color: #000; }
+  .done .num span { display: none; } .done .num::after { content: "\2713"; }
+  .step p { margin: 6px 0 0; }
+  .step ul { margin: 8px 0 0; padding-left: 22px; } .step li { margin: 4px 0; }
+  .hint { color: var(--dim); font-size: 16px; }
+  button#go { font-family: inherit; font-size: 24px; font-weight: 800; line-height: 1; background: var(--acc); color: #000; border: 0; border-radius: 12px;
+              padding: 22px 0; width: 100%; cursor: pointer; letter-spacing: .1em; text-transform: uppercase; margin-top: 14px; }
+  button#go:disabled { background: var(--panel2); color: var(--faint); cursor: default; }
+  progress { -webkit-appearance: none; appearance: none; width: 100%; height: 14px; margin-top: 16px; border: 0; border-radius: 7px;
+             background: var(--panel2); overflow: hidden; }
+  progress::-webkit-progress-bar { background: var(--panel2); }
+  progress::-webkit-progress-value { background: var(--acc); }
+  progress::-moz-progress-bar { background: var(--acc); }
+  #status { margin-top: 12px; min-height: 1.5em; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  #status.bad { color: var(--red); } #status.good { color: var(--ok); }
+  .keys { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 10px 0 0; }
+  .keys dt { font-weight: 800; color: var(--acc); letter-spacing: .04em; }
+  .keys dd { margin: 0; }
+  pre { color: var(--faint); font-size: 12px; white-space: pre-wrap; margin-top: 12px; max-height: 160px; overflow: auto; }
+  details { margin: 28px 0 0; background: var(--panel); border-radius: 12px; padding: 14px 18px; }
+  summary { cursor: pointer; font-weight: 700; font-size: 19px; }
+  .small { color: var(--dim); font-size: 15px; }
+  a { color: inherit; }
+  .btn2 { display: inline-block; font-family: inherit; font-size: 17px; font-weight: 700; line-height: 1.2; background: var(--panel2); color: var(--fg);
+          border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; cursor: pointer; text-decoration: none; }
+  .btn2:disabled { color: var(--faint); cursor: default; }
+  input[type=checkbox] { width: 20px; height: 20px; vertical-align: -4px; }
+  footer { margin-top: 34px; color: var(--faint); font-size: 14px; line-height: 1.5; }
+  [data-l][hidden] { display: none; }
+  @media (max-width: 460px) { body { font-size: 17px; } .lead { font-size: 22px; } .logo svg { width: 180px; } .step h2 { font-size: 21px; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><div class="logo"><!--LOGO--></div>
+    <div class="langs"><button data-lang="en">EN</button><button data-lang="fr">FR</button></div></div>
+  <div class="strip"><i></i><i></i><i></i><i></i></div>
+  <!--STUDIO_GUIDE-->
+  <!--BANNER-->
+  <p class="tag" data-t="kicker"></p>
+  <p class="lead" data-t="lead"></p>
+  <p class="sub" data-t="sub"></p>
+  <div class="exp" role="note"><b data-t="expTitle"></b><p data-t="expText"></p></div>
+
+  <ol class="steps">
+    <li class="step now" id="s1">
+      <h2><span class="num"><span>1</span></span><span data-t="s1t"></span></h2>
+      <ul><li data-t="s1a"></li><li data-t="s1b"></li><li data-t="s1c"></li></ul>
+    </li>
+    <li class="step" id="s2">
+      <h2><span class="num"><span>2</span></span><span data-t="s2t"></span></h2>
+      <p data-t="s2a"></p>
+      <button id="go" disabled data-t="install"></button>
+      <progress id="bar" max="100" value="0"></progress>
+      <p id="status" role="status" aria-live="polite"></p>
+      <p class="hint" data-t="warn"></p>
+    </li>
+    <li class="step" id="s3">
+      <h2><span class="num"><span>3</span></span><span data-t="s3t"></span></h2>
+      <p data-t="s3a"></p>
+      <dl class="keys">
+        <dt>PLAY</dt><dd data-t="kPlay"></dd>
+        <dt>SEL</dt><dd data-t="kSel"></dd>
+        <dt>SEL 9</dt><dd data-t="kAll"></dd>
+        <dt>ENV</dt><dd data-t="kEnv"></dd>
+        <dt>FX</dt><dd data-t="kFx"></dd>
+        <dt>PRESET</dt><dd data-t="kPreset"></dd>
+        <dt>REC</dt><dd data-t="kRec"></dd>
+        <dt>GLO</dt><dd data-t="kGlo"></dd>
+      </dl>
+    </li>
+  </ol>
+
+  <pre id="log"></pre>
+  <p><button id="app" class="btn2" hidden data-t="appInstall"></button></p>
+  <p class="small" data-t="direct"></p>
+  <p class="small" data-t="beta"></p>
+  <p class="small"><span data-t="brick"></span>
+    <a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener">FM-1-transporter</a></p>
+  <details>
+    <summary data-t="stockTitle"></summary>
+    <p class="small" data-t="stockHelp"></p>
+    <p class="small"><a href="https://www.m-vave.com/download" target="_blank" rel="noopener">www.m-vave.com/download</a></p>
+    <p class="small"><label><input id="stock-saved" type="checkbox"> <span data-t="stockSaved"></span></label></p>
+    <p class="small"><label><span data-t="stockFile"></span><br><input id="stock-file" type="file" accept=".fwsc"></label></p>
+    <p><button id="stock-go" class="btn2" disabled data-t="stockGo"></button></p>
+    <p class="small" data-t="back"></p>
+  </details>
+  <footer><b>SIREN</b> by 3dSam (<a href="https://github.com/isod89" target="_blank" rel="noopener">isod89</a>): a rave that writes itself.
+    Its sounds are Clipper's engines, grown from <a href="https://github.com/isod89/sloop-fm1" target="_blank" rel="noopener">SLOOP</a>,
+    based on <a href="https://github.com/hugelton/Felucca" target="_blank" rel="noopener">Felucca</a> by Leo Kuroshita (@kurogedelic),
+    <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>. FM6: msfa / Dexed (Apache-2.0). PHYS: DaisySP and
+    Mutable Instruments Rings (MIT). Hold OCT− alone while switching on for USB rescue.<br>
+    M-VAVE, FM-1 and the other product names above are trademarks of their respective owners; SIREN is not affiliated with them.<br>
+    <span data-t="license"></span> <a href="https://github.com/hugelton/Felucca" target="_blank" rel="noopener">github.com/hugelton/Felucca</a>
+    <span hidden><a href="../editor/clipper-editor.html" download="clipper-editor.html">editor</a></span></footer>
+</main>
+<script type="module">
+/*LIB*/
+const $ = (id) => document.getElementById(id);
+const TEXT = {
+  en: {
+    kicker: "Firmware for the M-VAVE FM-1",
+    lead: "SIREN turns your FM-1 into a rave that writes itself.",
+    sub: "Eight styles, endless tracks, and you play them like a DJ: drops, builds, effects, the mix in your hands.",
+    expTitle: "EXPERIMENTAL",
+    expText: "SIREN is still being tested on the FM-1. If something sounds wrong or crackles, tell us the style and what the screen shows (CPU %, ECO).",
+    s1t: "Connect the FM-1", s1a: "Plug the FM-1 into this computer with a USB data cable (no hub).",
+    s1b: "Use Chrome or Edge on a computer.", s1c: "Close other apps and tabs that use MIDI.",
+    s2t: "Install SIREN", s2a: "Press the button. When the browser asks, allow MIDI. It takes about a minute.",
+    install: "Install SIREN", warn: "Do not unplug the USB cable while it writes.",
+    s3t: "Play", s3a: "The FM-1 restarts with SIREN. Press PLAY and let it run. The keys:",
+    kPlay: "start / stop the rave", kSel: "the style (keys 1-8); it comes in on the next phrase",
+    kAll: "ALL SOUNDS: the next tracks pick from every style's sounds", kEnv: "the form: BREAK, BUILD, DROP, FILL, NEW MELODY, NEXT TRACK...",
+    kFx: "hold a white key: a DJ effect (rolls, filters, echo, risers)", kPreset: "another sound for the layer you chose (SELECT); every style's sounds",
+    kRec: "a new rave (a new seed)", kGlo: "the settings and a reminder of every button",
+    appInstall: "Install the app (the installer offline, Android too)",
+    direct: "Connect the USB cable directly to the computer. No probe or Transporter is needed.",
+    brick: "If an install fails and the FM-1 no longer starts, recovering it needs a Transporter:",
+    beta: "This is custom firmware with no warranty. The author accepts no responsibility if your FM-1 is damaged or misbehaves because of it. Use it at your own risk.",
+    nomidi: "This browser cannot do it. Open the page in Chrome or Edge.", loadfail: "Could not load: ",
+    ready: "Ready: SIREN ", start: "Starting…", verify: "Checking…", loader: "Switching to update mode…", write: "Writing…",
+    reboot: "Restarting…", done: "Done! SIREN is on your FM-1.", stopped: "Stopped. Replug the USB cable and press Install again.",
+    error: "Error: ",
+    denied: "MIDI (SysEx) access was not allowed. Allow MIDI in the site settings (address bar) and press Install again.",
+    notfound: "FM-1 not found. Check the USB cable (a data cable), close other apps that use MIDI, and press Install again.",
+    model: "The connected device is not an FM-1.",
+    lost: "The USB connection was lost. Replug it and press Install again.",
+    noloader: "The FM-1 in update mode was not found. Replug the USB cable and press Install again (it stays in update mode until it is finished).",
+    noreturn: "The FM-1 did not come back. Switch it off and on.",
+    mismatch: "Written, but the FM-1 reports another version: ",
+    foreign: "The FM-1 is in the update mode of another firmware. Finish that update with its own updater (M-UPGRADE), then press Install again: ",
+    badpkg: "The file to install is damaged. Reload the page.",
+    leave: "Writing. Do not close the page.",
+    license: "GPL-3.0, no warranty. Source:",
+    stockTitle: "Go back to the official firmware",
+    stockHelp: "Download the official FM-1 firmware (V16, or V15) from M-VAVE and select the FM-1.fwsc inside it, unmodified. The file is checked in this browser; it is not sent anywhere.",
+    stockSaved: "I understand: SIREN leaves the FM-1 (I can install it again here)",
+    stockFile: "The official FM-1.fwsc", stockGo: "Install the official firmware",
+    stockValid: "Official firmware verified", stockBad: "Not the official firmware (V16 / V15): ",
+    stockConfirm: "Install the official firmware on the FM-1?",
+    stockFinish: "The FM-1 is in SIREN's update mode. Press Install SIREN to finish first, then go back to the official firmware.",
+    back: "M-VAVE's own updater, M-UPGRADE (Downloads → PC Software), works too. If it does not find the FM-1, close every other app and browser tab that uses MIDI.",
+  },
+  fr: {
+    kicker: "Firmware pour la M-VAVE FM-1",
+    lead: "SIREN fait de ta FM-1 une rave qui s'écrit toute seule.",
+    sub: "Huit styles, des morceaux sans fin, et tu les joues comme un DJ : drops, montées, effets, le mix dans tes mains.",
+    expTitle: "EXPÉRIMENTAL",
+    expText: "SIREN est encore en test sur la FM-1. Si quelque chose sonne mal ou craque, dis-nous le style et ce que montre l'écran (CPU %, ECO).",
+    s1t: "Branche la FM-1", s1a: "Branche la FM-1 sur cet ordinateur avec un câble USB de données (sans hub).",
+    s1b: "Utilise Chrome ou Edge sur un ordinateur.", s1c: "Ferme les autres applis et onglets qui utilisent le MIDI.",
+    s2t: "Installe SIREN", s2a: "Appuie sur le bouton. Quand le navigateur le demande, autorise le MIDI. Ça prend environ une minute.",
+    install: "Installer SIREN", warn: "Ne débranche pas le câble USB pendant l'écriture.",
+    s3t: "Joue", s3a: "La FM-1 redémarre avec SIREN. Appuie sur PLAY et laisse tourner. Les touches :",
+    kPlay: "lance / arrête la rave", kSel: "le style (touches 1-8) ; il arrive à la phrase suivante",
+    kAll: "TOUS LES SONS : les morceaux suivants piochent dans les sons de tous les styles", kEnv: "la forme : BREAK, BUILD, DROP, FILL, NOUVELLE MÉLODIE, MORCEAU SUIVANT…",
+    kFx: "garde une touche blanche : un effet de DJ (rolls, filtres, écho, risers)", kPreset: "un autre son pour la couche choisie (SELECT) ; les sons de tous les styles",
+    kRec: "une nouvelle rave (une nouvelle graine)", kGlo: "les réglages et le rappel de chaque bouton",
+    appInstall: "Installer l'app (l'installateur hors ligne, Android aussi)",
+    direct: "Branche le câble USB directement sur l'ordinateur. Aucune sonde ni Transporter n'est nécessaire.",
+    brick: "Si une installation échoue et que la FM-1 ne démarre plus, il faut un Transporter pour la récupérer :",
+    beta: "C'est un firmware personnalisé sans garantie. L'auteur décline toute responsabilité si ta FM-1 est endommagée ou fonctionne mal à cause de lui. Utilise-le à tes risques.",
+    nomidi: "Ce navigateur ne peut pas le faire. Ouvre la page dans Chrome ou Edge.", loadfail: "Chargement impossible : ",
+    ready: "Prêt : SIREN ", start: "Démarrage…", verify: "Vérification…", loader: "Passage en mode mise à jour…", write: "Écriture…",
+    reboot: "Redémarrage…", done: "Terminé ! SIREN est sur ta FM-1.", stopped: "Arrêté. Rebranche le câble USB et appuie de nouveau sur Installer.",
+    error: "Erreur : ",
+    denied: "L'accès MIDI (SysEx) a été refusé. Autorise le MIDI dans les paramètres du site (barre d'adresse) et appuie de nouveau sur Installer.",
+    notfound: "FM-1 introuvable. Vérifie le câble USB (un câble de données), ferme les autres applis qui utilisent le MIDI, et appuie de nouveau sur Installer.",
+    model: "L'appareil branché n'est pas une FM-1.",
+    lost: "La connexion USB a été perdue. Rebranche-la et appuie de nouveau sur Installer.",
+    noloader: "La FM-1 en mode mise à jour est introuvable. Rebranche le câble USB et appuie de nouveau sur Installer (elle reste en mode mise à jour jusqu'à la fin).",
+    noreturn: "La FM-1 n'est pas revenue. Éteins-la et rallume-la.",
+    mismatch: "Écrit, mais la FM-1 annonce une autre version : ",
+    foreign: "La FM-1 est en mode mise à jour d'un autre firmware. Termine cette mise à jour avec son propre outil (M-UPGRADE), puis appuie de nouveau sur Installer : ",
+    badpkg: "Le fichier à installer est endommagé. Recharge la page.",
+    leave: "Écriture en cours. Ne ferme pas la page.",
+    license: "GPL-3.0, sans garantie. Source :",
+    stockTitle: "Revenir au firmware officiel",
+    stockHelp: "Télécharge le firmware officiel de la FM-1 (V16, ou V15) sur le site de M-VAVE et choisis le FM-1.fwsc qu'elle contient, sans le modifier. Le fichier est vérifié dans ce navigateur ; il n'est envoyé nulle part.",
+    stockSaved: "J'ai compris : SIREN quitte la FM-1 (je pourrai le réinstaller ici)",
+    stockFile: "Le FM-1.fwsc officiel", stockGo: "Installer le firmware officiel",
+    stockValid: "Firmware officiel vérifié", stockBad: "Ce n'est pas le firmware officiel (V16 / V15) : ",
+    stockConfirm: "Installer le firmware officiel sur la FM-1 ?",
+    stockFinish: "La FM-1 est en mode mise à jour de SIREN. Appuie d'abord sur Installer SIREN pour terminer, puis reviens au firmware officiel.",
+    back: "L'outil de M-VAVE, M-UPGRADE (Downloads → PC Software), fonctionne aussi. S'il ne trouve pas la FM-1, ferme toutes les autres applis et onglets qui utilisent le MIDI.",
+  },
+};
+let lang = (navigator.language || "en").toLowerCase().startsWith("fr") ? "fr" : "en";
+try { const v = localStorage.getItem("siren-installer-lang"); if (["en", "fr"].includes(v)) lang = v; } catch (e) { /* no storage */ }
+const t = (k) => TEXT[lang][k];
+let lastKey = null, lastArg = "", lastTone = "";
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-t]").forEach((e) => { e.textContent = t(e.dataset.t); });
+  document.querySelectorAll("[data-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  if (lastKey) $("status").textContent = t(lastKey) + lastArg;
+}
+document.querySelectorAll("[data-lang]").forEach((b) => b.addEventListener("click", () => {
+  lang = b.dataset.lang;
+  try { localStorage.setItem("siren-installer-lang", lang); } catch (e) { /* no storage */ }
+  applyLang();
+}));
+applyLang();
+/* the steps: the one to do now lit; the done ones ticked */
+function stepAt(n) {
+  [1, 2, 3].forEach((k) => { const e = $("s" + k); e.classList.toggle("now", k === n); e.classList.toggle("done", k < n); });
+}
+if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol))
+  navigator.serviceWorker.register("../sw.js").catch(() => {});
+{
+  let ask = null;
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); ask = e; $("app").hidden = false; });
+  window.addEventListener("appinstalled", () => { ask = null; $("app").hidden = true; });
+  $("app").addEventListener("click", async () => {
+    if (!ask) return;
+    ask.prompt();
+    await ask.userChoice.catch(() => {});
+    ask = null;
+    $("app").hidden = true;
+  });
+}
+const BAD = new Set(["nomidi", "loadfail", "stopped", "error", "denied", "notfound", "model", "lost", "noloader", "noreturn", "mismatch", "foreign", "badpkg", "stockBad"]);
+const sayK = (k, arg = "") => {
+  lastKey = k; lastArg = arg;
+  $("status").textContent = t(k) + arg;
+  $("status").className = BAD.has(k) ? "bad" : k === "done" || k === "ready" || k === "stockValid" ? "good" : "";
+};
+const log = (s) => { $("log").textContent += s + "\n"; };
+let image = null;
+const meta = /*META*/;
+
+let writing = false, stock = null;
+const lockAll = (on) => {
+  writing = on;
+  $("go").disabled = on || !image;
+  $("stock-go").disabled = on || !stock || !$("stock-saved").checked;
+  $("stock-file").disabled = on;
+};
+window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = t("leave"); } });
+
+(async () => {
+  if (!navigator.requestMIDIAccess) { sayK("nomidi"); return; }
+  try {
+    const r = await fetch(meta.pkg);
+    if (!r.ok) throw new Error(`${meta.pkg}: HTTP ${r.status}`);
+    const pkg = new Uint8Array(await r.arrayBuffer());
+    if (productOf(pkg) !== meta.product) { sayK("badpkg"); return; }
+    if (meta.sha256 && self.crypto && crypto.subtle) {   /* a damaged download is never offered (the loader checks its CRC too) */
+      const h = [...new Uint8Array(await crypto.subtle.digest("SHA-256", pkg))].map((b) => b.toString(16).padStart(2, "0")).join("");
+      if (h !== meta.sha256) { sayK("badpkg"); log(`sha256 ${h}, expected ${meta.sha256}`); return; }
+    }
+    image = logicalImage(pkg);
+    sayK("ready", meta.version.replace(/^[a-z]+-/i, ""));
+    lockAll(writing);
+  } catch (e) { sayK("loadfail", e.message); }
+})();
+
+const total = 74 + 1179;                           /* reads: step 1, step 2 (head + app area, SLOOP 2.0 loader) */
+const step = (k, a) => {
+  log(`${k} ${a ?? ""}`);
+  if (k === "start") { sayK("start"); stepAt(2); }
+  if (k === "verify") { sayK("verify"); $("bar").value = Math.min(100, (a / total) * 100); }
+  if (k === "loader") sayK("loader");
+  if (k === "write") { sayK("write"); $("bar").value = Math.min(100, ((74 + a) / total) * 100); }
+  if (k === "reboot") sayK("reboot");
+  if (k === "done") { $("bar").value = 100; sayK("done"); stepAt(3); }
+};
+const failed = (e) => {
+  if (e && e.code && TEXT[lang][e.code]) sayK(e.code, e.detail || "");
+  else sayK("error", e && e.message);
+  log(String(e && e.stack || e));
+};
+
+$("go").addEventListener("click", async () => {
+  if (writing) return;
+  lockAll(true);
+  stepAt(2);
+  let midi;
+  try { midi = await navigator.requestMIDIAccess({ sysex: true }); }
+  catch (e) { sayK("denied"); lockAll(false); return; }
+  try {
+    const up = new Updater(midi, log);
+    const ota = await up.find((id) => /^ota-/i.test(id.model));
+    if (ota) {
+      ota.link.close();
+      const ok = await up.resume(image, step);
+      sayK(ok ? "done" : "stopped");
+      if (ok) stepAt(3);
+    } else {
+      await up.install(image, meta.product, step);
+    }
+  } catch (e) { failed(e); }
+  lockAll(false);
+});
+
+$("stock-saved").addEventListener("change", () => lockAll(writing));
+$("stock-file").addEventListener("change", async () => {
+  const f = $("stock-file").files[0];
+  stock = null;
+  lockAll(writing);
+  if (!f) return;
+  try { stock = await validateStockPackage(new Uint8Array(await f.arrayBuffer())); sayK("stockValid"); }
+  catch (e) { sayK("stockBad", e.message); }
+  lockAll(writing);
+});
+$("stock-go").addEventListener("click", async () => {
+  if (writing || !stock || !$("stock-saved").checked || !confirm(t("stockConfirm"))) return;
+  lockAll(true);
+  let midi;
+  try { midi = await navigator.requestMIDIAccess({ sysex: true }); }
+  catch (e) { sayK("denied"); lockAll(false); return; }
+  try {
+    const up = new Updater(midi, log);
+    const ota = await up.find((id) => /^ota-/i.test(id.model));
+    if (ota) {
+      ota.link.close();
+      if (OUR_LOADER(ota.id)) sayK("stockFinish");
+      else sayK((await up.resume(stock.image, step, { product: stock.product })) ? "done" : "stopped");
+    } else {
+      await up.install(stock.image, stock.product, step);
+    }
+  } catch (e) { failed(e); }
+  lockAll(false);
+});
+</script>
+</body>
+</html>

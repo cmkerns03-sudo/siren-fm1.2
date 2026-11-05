@@ -153,7 +153,7 @@ run "SIREN: WOB (each type: bounded, the pitch, the wobble heard; random patches
 $SIR -DNVOICE=8 -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -o "$OUT/siren_host" tests/siren/siren_host.c -lm -lpthread
 run "SIREN: every style through the firmware's audio path (sanitizers)" sh -c 'for st in 0 1 2 3 4 5 6 7; do "$0" $st S1R-3N00 20 /dev/null 3 >/dev/null || exit 1; done' "$OUT/siren_host"
 $SIR -DNVOICE=8 -o "$OUT/siren_host_o2" tests/siren/siren_host.c -lm -lpthread
-run "SIREN 0.8.2: on two cores (the master's tail a block later on core 1, the drums, the voices split) what one core plays, sample for sample" sh -c 'for st in 0 3 6; do "$0" $st S1R-3N00 30 "$1/siren_c1.wav" >/dev/null && CORES=2 "$0" $st S1R-3N00 30 "$1/siren_c2.wav" >/dev/null && cmp -s "$1/siren_c1.wav" "$1/siren_c2.wav" || exit 1; done' "$OUT/siren_host_o2" "$OUT"
+run "SIREN 0.8.2, 0.9: on two cores (the master's tail a block later on core 1 with the drums, polled; the voices split) what one core plays, sample for sample" sh -c 'for st in 0 3 6; do "$0" $st S1R-3N00 30 "$1/siren_c1.wav" >/dev/null && CORES=2 "$0" $st S1R-3N00 30 "$1/siren_c2.wav" >/dev/null && cmp -s "$1/siren_c1.wav" "$1/siren_c2.wav" || exit 1; done' "$OUT/siren_host_o2" "$OUT"
 $SIR -DNVOICE=8 -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -o "$OUT/siren_dj" tests/siren/dj_test.c -lm -lpthread
 mkdir -p build/siren_dj
 run "SIREN 0.2: the DJ's effects, every style and key (back where it was after; kills, cut, rolls), the CPU guard (sanitizers)" "$OUT/siren_dj" build/siren_dj
@@ -162,6 +162,8 @@ mkdir -p build/siren_hands
 run "SIREN 0.5: the hands (black keys, mixer, sounds) and the arrangement (three melodic layers at most; sanitizers)" "$OUT/siren_hands" build/siren_hands
 $SIR -I. -DNVOICE=8 -o "$OUT/siren_levels" tests/siren/level_cal.c -lm -lpthread
 run "SIREN 0.5: every sound at its layer's loudness (within 2 dB), its hard highs softened (tools/siren/levels.json)" sh -c '"$0" check > "$1/levels.txt"' "$OUT/siren_levels" "$OUT"
+$SIR -DNVOICE=8 -o "$OUT/siren_half" tests/siren/half_test.c -lm -lpthread
+run "SIREN 0.9: the pad at half the rate (each pad sound: as loud, the same bands to 6.4 kHz)" sh -c '"$0" > "$1/siren_half.txt"' "$OUT/siren_half" "$OUT"
 $SIR -DNVOICE=8 -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -o "$OUT/siren_screen" tests/siren/screen_test.c -lm -lpthread
 mkdir -p build/siren_screen
 run "SIREN 0.3: the deck screen drawn through a set (only what changes sent; sanitizers)" "$OUT/siren_screen" 7 S1R-3N07 build/siren_screen

@@ -93,14 +93,25 @@ int main(int argc, char **argv)
           siren_cmd(SC_STAY, 0, 0, 0); bars(72);
           CHECK(sb.plan_at == at || sec == SEC_BUILD, "STAY: the plan moved on (%u -> %u)", at, sb.plan_at);
           siren_cmd(SC_STAY, 0, 0, 0); bars(1); }
-        /* PRESET on the hook: the next sound of the style's, calibrated, kept */
+        /* PRESET on the hook: the next sound (0.9: of every style's, the style's own first), calibrated, kept */
         { int16_t was = sb.snd[L_HOOK]; uint32_t n = SD_CUR[sb.style][L_HOOK].n, at;
           siren_cmd(SC_SOUND, L_HOOK, 1, 0); steps(1);
           for (i = 0; i < 400; i++) block1();
-          at = SD_CUR[sb.style][L_HOOK].first + (uint32_t)sb.snd[L_HOOK] % n;
+          { int8_t from; at = (uint32_t)siren_ext_at(sb.style, L_HOOK, (uint32_t)sb.snd[L_HOOK] % sr.nall[L_HOOK], &from); }   /* (0.9: every
+                                                     * style's sounds, the style's own first) */
           CHECK(n < 2 || (sb.snd[L_HOOK] != was && sb.locks[L_HOOK]), "PRESET: the hook's sound did not change");
           CHECK(sr.applied[L_HOOK] == sb.snd[L_HOOK] && sr.trim[L_HOOK] == SD_TRIM[at] && sr.tone[L_HOOK] == SD_TONE[at], "PRESET: not applied / calibrated");
           CHECK(trk[L_HOOK - 1].p[P_LEVEL] == siren_level(L_HOOK), "PRESET: the hook's level"); }
+        /* (0.9) ALL: the brain picks from every style's sounds; off: the style's own again. The FX layer: the riser's kinds */
+        { uint8_t k0 = sr.rs_kind;
+          siren_cmd(SC_ALLBANK, 1, 0, 0); steps(1);
+          CHECK(sr.allbank && sb_pal.ncur[sb.style][L_BASS] == sr.nall[L_BASS] && sr.nall[L_BASS] >= SD_CUR[sb.style][L_BASS].n &&
+                sb_pal.ncur[sb.style][L_FX] == RS_N, "ALL: every style's sounds");
+          siren_cmd(SC_ALLBANK, 0, 0, 0); steps(1);
+          CHECK(!sr.allbank && sb_pal.ncur[sb.style][L_BASS] == SD_CUR[sb.style][L_BASS].n, "ALL off: the style's sounds");
+          siren_cmd(SC_SOUND, L_FX, 1, 0); steps(1);
+          for (i = 0; i < 400; i++) block1();
+          CHECK(sr.rs_kind != k0 && sr.rs_kind < RS_N && sr.sound_eng[L_FX] < 0, "PRESET on the FX layer: another riser"); }
         /* the mixer */
         siren_cmd(SC_MIX, SM_LVOL + L_HOOK, -20, 0); siren_cmd(SC_MIX, SM_LFLT + L_ARP, 40, 0); siren_cmd(SC_MIX, SM_FILT, -30, 0);
         siren_cmd(SC_MIX, SM_SPACE, 0, 0); steps(2);

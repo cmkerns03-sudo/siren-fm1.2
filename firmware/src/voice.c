@@ -1294,8 +1294,9 @@ static int32_t uni_level(const track_t *t)
     return vm == V_UNISON ? (trk_nvoice(t) >= NVOICE ? 11796 : 16384) : vm == V_PUNI4 ? 16384 : vm == V_PUNI2 ? 22938 : 32767;
 }
 #endif
-#if ABYSS
-/* (0.1.5) the slow layers at half the rate: the drone, the pad, the low and the swell (parts 1, 2, 3, 6), the engines that
+#if SIREN
+/* (ABYSS 0.1.5) the slow layers at half the rate: the drone, the pad, the low and the swell (parts 1, 2, 3, 6; SIREN 0.9: its
+ * pad, part 4), the engines that
  * render the same there (tests/abyss/half_test.c: each sound of those layers, both ways); hr_on: this block's (fx.c
  * abyss_up brings the part back to the full rate) */
 static uint8_t hr_on[NPART], abyss_half_off;
@@ -1303,7 +1304,11 @@ static int abyss_half_part(const track_t *t, const engine_t *e)
 {
     static int16_t glass = -2;                          /* HYBRID GLASS PAD: its shine is over 8 kHz (7 % of it): full rate */
     uint32_t pi = (uint32_t)(t - trk), k;
+#if ABYSS
     if (abyss_half_off || !(pi == 0u || pi == 1u || pi == 2u || pi == 5u))
+#else
+    if (abyss_half_off || pi != 3u)                     /* (SIREN 0.9: the pad) */
+#endif
         return 0;
     if (glass == -2)
         for (glass = -1, k = 0; k < ENG_HYBRID.npresets; k++)
@@ -1400,7 +1405,7 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
         sv[MS_MAC3] = mac3 * 258, sv[MS_MAC4] = clamp(p[P_MAC4], 0, 127) * 258;
     }
 #endif
-#if ABYSS
+#if SIREN
     uint32_t nr_n = n;                                  /* (0.1.5) the samples the voices render: n, or n / 2 */
     {
         uint32_t pi = (uint32_t)(t - trk);
@@ -1678,7 +1683,7 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
     if (split)
         vs_finish(t, e, out, nr_n);
 #endif
-#if ABYSS
+#if SIREN
     v_half = 0;
 #else
 #undef nr_n

@@ -13,6 +13,9 @@ typedef void (*cpu1_job_t)(uint32_t);
 static int cpu1_run(cpu1_job_t fn, uint32_t arg);
 static int cpu1_wait(void);
 static int cpu1_on(void);
+/* (SIREN 0.9) cpu1_poll(): 1 when the job handed over is done (cpu1_wait would return at once), without waiting; a
+ * caller may go on with other work meanwhile and wait later. The host double's inline mode: 0 (its job runs at wait) */
+static int cpu1_poll(void);
 /* the render units core 1 gets (fx.c units_split): -1 the firmware's share (the last part and the drums), else a
  * mask of them, bit k = synth part k, bit NPART = the drums; 0 = none (the menu's 2ND CORE OFF, the tests:
  * CPU1_UNITS=mask in the host double). Whatever the value, the output is the same, bit for bit */

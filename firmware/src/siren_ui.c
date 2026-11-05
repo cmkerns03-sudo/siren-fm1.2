@@ -13,7 +13,8 @@
  *   FX               the DJ's effects, while a white key is held: 1-4 ROLL 1/4 1/8 1/16 1/32, 5 LOW PASS, 6 HIGH PASS,
  *                    7 ECHO OUT, 8 WASH OUT, 9-11 KILL LOW MID HIGH, 12 GATE, 13-16 the style's own (siren.c SIREN_PX)
  *   SEL              the style: white keys 1-8 TECHNO TRANCE PSY ACID RAVE HARD DRUM&BASS HOUSE (playing: on the next
- *                    8-bar phrase; the same key again: at once); 16 keep this style
+ *                    8-bar phrase; the same key again: at once); 9 ALL SOUNDS (0.9: the next tracks' sounds from every
+ *                    style's bank, not the style's own; PRESET always goes through all of them); 16 keep this style
  *   ENV              the track's form: white keys 1-11 BREAK, BUILD 4, BUILD 16, DROP, FILL, NEW MELODY, NEW BASS,
  *                    NEW GROOVE, KEY UP, NEXT TRACK, STAY (as the black keys, outside the deck)
  *   LFO              the layers' mix: white keys 1-7 the layer, 9-15 its on / off, 16 the strips back to flat; the
@@ -273,6 +274,9 @@ static void siren_input(void)
                 if (!sr.playing) siren_cmd(SC_STYLE, su.style, 0, 0);
                 else siren_cmd(SC_STYLEQ, su.style, 0, 0);
                 su_message(SU_STYLE[su.style]);
+            } else if (k == 8u) {                            /* (0.9) ALL: every style's sounds for the next tracks */
+                siren_cmd(SC_ALLBANK, !sr.allbank, 0, 0);
+                su_message(!sr.allbank ? "ALL SOUNDS: NEXT TRACK" : "STYLE SOUNDS: NEXT TRACK");
             } else if (k == 15u) su_keep_style();
             break;
         case SP_ENV: if (k < 11u) su_black(k); break;
@@ -320,8 +324,8 @@ static void siren_leds(void)
             break;
         case SP_FX: dim = 1; on = su.px_key == (int8_t)k; break;
         case SP_SEL:
-            dim = k < 8u || k == 15u;
-            on = (k < 8u && k == sb.style % 8u) || (k == 15u && su.lock_style) || (sr.q_style == (int8_t)k && blink);
+            dim = k < 9u || k == 15u;
+            on = (k < 8u && k == sb.style % 8u) || (k == 8u && sr.allbank) || (k == 15u && su.lock_style) || (sr.q_style == (int8_t)k && blink);
             break;
         case SP_ENV: {
             uint8_t req[11] = {sb.break_req, sb.dive == 4u, sb.dive == 16u, sb.drop_req, (uint8_t)(sr.fill_req || sr.fill_on), 0, 0, 0,

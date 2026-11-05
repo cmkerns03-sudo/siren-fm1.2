@@ -19,14 +19,24 @@ static int16_t cho_buf[CHO_LEN] __attribute__((section(".pool")));
 /* the reverb: two input diffusers, then four delay lines mixed by a Hadamard matrix (a feedback delay
  * network: every echo feeds all four, so it thickens instead of ringing like a comb), damped in the
  * loop, one line slowly modulated (no metallic tone on long tails); left and right take different lines */
+#if SIREN && !ABYSS
+/* (SIREN 0.9) the room at half the rate (22.05 kHz, as the plate): every line in samples half as long, the same times
+ * (primes near the halves), two input samples a step, the output gliding between the steps; half the work */
+#define RV_HALF 1
+#define REV_MOD 6
+static const uint16_t REV_LINE[4] = {773, 967, 1193, 1399};
+static const uint16_t REV_AP[2] = {277, 223};
+#else
+#define RV_HALF 0
 #define REV_MOD 12               /* samples the modulated line moves (+-) */
 static const uint16_t REV_LINE[4] = {1559, 1931, 2389, 2791};   /* 35..63 ms, coprime */
 static const uint16_t REV_AP[2] = {556, 441};
+#endif
 #if CLIPPER_SYNTH && !SIREN      /* (1.0) in the pool, which has room in the synth (48 KB free): .lowram put line 0, the
                                   * left channel's own, right above the second core's stacks */
-static int16_t rev_line[1559 + 1931 + 2389 + 2791 + REV_MOD + 2] __attribute__((section(".pool")));
+static int16_t rev_line[1559 + 1931 + 2389 + 2791 + 12 + 2] __attribute__((section(".pool")));
 #else
-static int16_t rev_line[1559 + 1931 + 2389 + 2791 + REV_MOD + 2] __attribute__((section(".lowram")));   /* (the pool is
+static int16_t rev_line[1559 + 1931 + 2389 + 2791 + 12 + 2] __attribute__((section(".lowram")));   /* (the pool is
                                                                       * full; .lowram: the SRAM below the RAM region, app.ld) */
 #endif
 static int16_t rev_ap[556 + 441] __attribute__((section(".pool")));
@@ -35,6 +45,10 @@ static struct {
     int32_t dly_lp, dly_acc;
     uint16_t line_i[4], ap_i[2];
     int32_t line_lp[4];
+#if RV_HALF
+    int32_t rv_acc, rv_l0, rv_r0, rv_l1, rv_r1;   /* (SIREN 0.9) the half rate: the input's first half, the last two steps */
+    uint8_t rv_ph;
+#endif
     uint32_t dl_cur, dl_old;            /* (0.9) the delay's TIME now and the one it fades from (DL_XF samples) */
     uint32_t dl_x;                      /* .. samples into that fade (DL_XF: none) */
     int32_t cdep;                       /* (0.9) the chorus's DEPTH now (glides: a jump moved its taps at once) */
@@ -271,7 +285,7 @@ static uint32_t delay_samples(void)
  * 33 KB of lines (the punch-in ring's memory, gone in the synth); two input samples averaged into one tank step, the
  * output between the last two steps. */
 enum { PL_AP1, PL_AP2, PL_AP3, PL_AP4, PL_MA, PL_DA1, PL_AA, PL_DA2, PL_MB, PL_DB1, PL_AB, PL_DB2, PL_PRE, PL_N };
-#if ABYSS
+#if SIREN
 /* (ABYSS 0.1.3) its HALL (and SHIMMER) at a quarter of the rate (11.025 kHz): every line and tap half as long in
  * samples (the same times), four input samples a step, the output gliding between the steps. HALL's input is darkened
  * to ~2.8 kHz first (bw), well under the 5.5 kHz the quarter rate keeps: its tail sounds the same, for half the work */
@@ -286,7 +300,7 @@ enum { PL_AP1, PL_AP2, PL_AP3, PL_AP4, PL_MA, PL_DA1, PL_AA, PL_DA2, PL_MB, PL_D
 static const uint16_t PL_LEN[PL_N] = {PLQ(105u), PLQ(79u), PLQ(281u), PLQ(205u), PLQ(498u) + PL_EXC + 2, PLQ(3299u),
                                       PLQ(1334u), PLQ(2756u), PLQ(673u) + PL_EXC + 2, PLQ(3124u), PLQ(1968u),
                                       PLQ(2343u), PLQ(2206u)};
-#if ABYSS                                 /* (0.1.5: the quarter rate's lines, half the RAM: 18.9 KB, given to abyss_ens) */
+#if SIREN                                 /* (ABYSS 0.1.5, SIREN 0.9: the quarter rate's lines, half the RAM: 18.9 KB) */
 #define PL_TOTAL (PLQ(105u) + PLQ(79u) + PLQ(281u) + PLQ(205u) + PLQ(498u) + PL_EXC + 2 + PLQ(3299u) + PLQ(1334u) + \
                   PLQ(2756u) + PLQ(673u) + PL_EXC + 2 + PLQ(3124u) + PLQ(1968u) + PLQ(2343u) + PLQ(2206u))
 #else
@@ -423,7 +437,7 @@ static void plate_run(const int32_t *rev_in, int32_t *wet_l, int32_t *wet_r, uin
                                                                  * samples (HALL: 18 ms more, a big room's) */
     int32_t bw = hall ? 18000 : 26000, shim = rt == RT_SHIMMER ? SH_GAIN : 0;   /* (SHIMMER: some of the tail an octave up) */
     uint32_t i;
-#if ABYSS
+#if SIREN
     pre = PLQ(pre);                                             /* (a quarter rate: the same cutoffs: k' = 1 - (1 - k)^2) */
     bw = 32767 - (((32767 - bw) * (32767 - bw)) >> 15);
     damp = 32767 - (((32767 - damp) * (32767 - damp)) >> 15);
@@ -434,7 +448,7 @@ static void plate_run(const int32_t *rev_in, int32_t *wet_l, int32_t *wet_r, uin
     for (i = 0; i < n; i++) {
         int32_t x = mulq15(rev_in[i], 13000), wl, wr;           /* (as the room's input) */
         int32_t g = rg0 + (((rg1 - rg0) * (int32_t)i) >> CTL_LOG2);
-#if ABYSS
+#if SIREN
         {   /* a quarter rate: the output glides from the step before to the last over the four samples */
             uint32_t ph = pl.half & 3u;
             wl = pl.y0l + (((pl.y1l - pl.y0l) * (int32_t)ph) >> 2);
@@ -517,6 +531,9 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
     int32_t fb = FXG[G_DFDBK] * 230, col = 2000 + FXG[G_DCOLOR] * 240;
     int32_t dmix = FXG[G_DMIX] * 258;
     int32_t g = 17000 + FXG[G_RSIZE] * 104, lpk = 32767 - FXG[G_RDAMP] * 200;   /* loop gain (RT60 ~0.4..4 s), damping */
+#if RV_HALF
+    lpk = 32767 - (((32767 - lpk) * (32767 - lpk)) >> 15);   /* (SIREN 0.9, half the rate: the same damping corner) */
+#endif
     int32_t cdepth = FXG[G_CDEPTH] * 6, cdep0;
     int32_t ca0, ca1, cb0, cb1, ma, mb, dca, dcb;
     int plate = CLIPPER_SYNTH && FXG[G_RTYPE] >= RT_PLATE;   /* Clipper: the plate (1.0: HALL, SHIMMER: its tank)
@@ -663,6 +680,15 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
             continue;
         }
         a = mulq15(rev_in[i], 13000);
+#if RV_HALF
+        if (!fx.rv_ph) {                                /* (SIREN 0.9) the first of two: kept; the output between */
+            fx.rv_acc = a, fx.rv_ph = 1;
+            wet_l[i] = yl + ((fx.rv_l0 + fx.rv_l1) >> 1);
+            wet_r[i] = yr + ((fx.rv_r0 + fx.rv_r1) >> 1);
+            continue;
+        }
+        a = (fx.rv_acc + a) >> 1, fx.rv_ph = 0;
+#endif
         {
             int16_t *c = rev_ap;
             for (k = 0; k < 2u; k++) {
@@ -705,8 +731,14 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
             int32_t g = rg0 + (((rg1 - rg0) * (int32_t)i) >> CTL_LOG2);
             o0 = mulq15(o0, g), o1 = mulq15(o1, g), o2 = mulq15(o2, g), o3 = mulq15(o3, g);
         }
+#if RV_HALF
+        fx.rv_l0 = fx.rv_l1, fx.rv_r0 = fx.rv_r1, fx.rv_l1 = o0 + o2, fx.rv_r1 = o1 - o3;
+        wet_l[i] = yl + fx.rv_l0;
+        wet_r[i] = yr + fx.rv_r0;
+#else
         wet_l[i] = yl + o0 + o2;
         wet_r[i] = yr + o1 - o3;
+#endif
     }
 #if CLIPPER_SYNTH
     if (plate)
@@ -1274,7 +1306,11 @@ static void abyss_ens(track_t *t, int32_t *b, uint32_t n, uint32_t h)   /* (h: a
         for (i = 0; i < n; i++)
             part_side[i] = (int32_t)(((int64_t)part_side[i] * (g * 5 / 2)) >> 15);
 }
-/* (0.1.5) a slow layer rendered at half the rate (voice.c track_render: n / 2 samples in b[0..]) back to the full rate:
+#else
+#define EN_ON(t) 0
+#endif
+#if SIREN
+/* (ABYSS 0.1.5, SIREN 0.9) a slow layer rendered at half the rate (voice.c track_render: n / 2 samples in b[0..]) back to the full rate:
  * each sample, then the one between (6-point interpolation: 150, -25, 3 / 256 each side; -60 dB at 2 kHz, the
  * images over 11 kHz under -30 dB at 5 kHz), 3 half-rate samples (0.14 ms) later. The side the same */
 static int32_t hr_hist[NPART][2][5];
@@ -1301,8 +1337,6 @@ static void abyss_up(track_t *t, int32_t *b, uint32_t n)
     if (part_side_on)
         abyss_up1(part_side, n, hr_hist[pi][1]);
 }
-#else
-#define EN_ON(t) 0
 #endif
 
 /* (0.7, SLOOP 2.7's, after JIANT FM 0.6.8, github.com/juanjiant-bit/JIANT) LEVEL and PAN glide: a knob's detent (or a
@@ -1437,10 +1471,12 @@ static void mix_part1(track_t *t, uint32_t n)
         return;
     }
 #endif
-#if ABYSS
-    {   /* (0.1.5) STRINGS' and SUPER's ensemble, the part's; a slow layer back to the full rate */
+#if SIREN
+    {   /* (ABYSS 0.1.5) STRINGS' and SUPER's ensemble, the part's; (and SIREN 0.9) a slow layer back to the full rate */
         uint32_t h = hr_on[(uint32_t)(t - trk) % NPART];
+#if ABYSS
         abyss_ens(t, b, n >> h, h);
+#endif
         if (h)
             abyss_up(t, b, n);
     }
@@ -1502,7 +1538,7 @@ static void mix_part1(track_t *t, uint32_t n)
             tsvf_t fc;                                  /* the track's FILTER (P_TFLT), after the SLICER */
             djf_t *f = &tflt[(uint32_t)(t - trk) % NTRK];
             if (djf_block(f, t->p[P_TFLT], &fc)) {
-#if ABYSS
+#if ABYSS                                               /* (SIREN keeps its SVF: its sounds are calibrated darker with it, its builds sweep it) */
                 if (f->mode < 0) {                      /* (ABYSS 0.1.3: the low-pass side, one pole) */
                     tflt_lp1(f, b, n, 0);
                     if (part_side_on)
@@ -1816,18 +1852,12 @@ static void mix_block(int32_t *out, uint32_t n)
 #if ABYSS
         static const uint8_t FIRST[4] = {0, 2, 1, 5}, LAST[2] = {3, 4};   /* (0.1.5: the drone and the low, few voices,
                                        * during the tail; then the pad and the swell, their chords split) */
-#else
-        static const uint8_t FIRST[4] = {0, 1, 2, 5}, LAST[2] = {3, 4};
-#endif
-#if ABYSS
         const uint32_t during = 2u, c1drums = 0u;   /* (the parts this core renders alone while core 1 runs the tail:
                                        * ABYSS (0.1.5) the drone and the low, at half the rate (the tail's filters keep
                                        * the full rate's: dsp.c tsvf_coef_fs); then the pad, the swell, the drums (here:
                                        * rare and light), the melody, the bells, split) */
 #else
-        const uint32_t during = 4u, c1drums = 1u;   /* (SIREN: its one-voice layers, the bass, the arp, the hook, the fx,
-                                       * while core 1 runs the tail, then the drums as before; then the pad and the
-                                       * stabs split) */
+        const uint32_t c1drums = 1u;                /* (SIREN: core 1 the tail and the drums; 0.9: polled, below) */
 #endif
         int handed;
         events_block(n);
@@ -1841,6 +1871,7 @@ static void mix_block(int32_t *out, uint32_t n)
         sd_n = n;
         handed = (fx_tq.n || c1drums) && cpu1_on() && cpu1_units != 0 && cpu1_run(tail_job, c1drums);
         siren_c1_busy = (uint8_t)handed;
+#if ABYSS
         for (i = 0; i < 4u; i++) {
             if (i == during) {                          /* (ABYSS: the tail done before the pad) */
                 if (!handed || cpu1_wait() < 0)
@@ -1850,8 +1881,7 @@ static void mix_block(int32_t *out, uint32_t n)
             }
             mix_part(&trk[FIRST[i]], n);
         }
-        if (handed >= 0) {                              /* (SIREN: the tail and the drums after the four, as the
-                                                         * drums were: the random numbers drawn in the same order) */
+        if (handed >= 0) {
             if (!handed || cpu1_wait() < 0)
                 tail_job(c1drums);                      /* (one core, or core 1 late and held: here) */
             siren_c1_busy = 0;
@@ -1860,6 +1890,29 @@ static void mix_block(int32_t *out, uint32_t n)
             siren_drums_job(0);                         /* (ABYSS: here, after the four, as before) */
         for (i = 0; i < 2u; i++)
             mix_part(&trk[LAST[i]], n);
+#else
+        {   /* (SIREN 0.9) the six parts in their order (the bass, the arp, the hook, the fx, the pad, the stabs); core 1
+             * on the tail and the drums meanwhile. As soon as it is done (polled between two parts), the parts left
+             * split their voices over both cores (the pad's chords, the stabs'); until then this core renders them
+             * alone: no core waits for the other while there is work (the output the same either way: a split is
+             * bit for bit the same, the tail and the drums touch nothing a part reads) */
+            static const uint8_t ORDER[6] = {0, 1, 2, 5, 3, 4};
+            for (i = 0; i < 6u; i++) {
+                if (handed > 0 && cpu1_poll()) {
+                    if (cpu1_wait() < 0)
+                        tail_job(c1drums);              /* (core 1 lost: held; its work here, once) */
+                    handed = -1;
+                    siren_c1_busy = 0;
+                }
+                mix_part(&trk[ORDER[i]], n);
+            }
+            if (handed >= 0) {
+                if (!handed || cpu1_wait() < 0)
+                    tail_job(c1drums);                  /* (one core, or core 1 late and held: here) */
+                siren_c1_busy = 0;
+            }
+        }
+#endif
         for (i = 0; i < n; i++) {
             mix_l[i] += sd_l[i];
             mix_r[i] += sd_r[i];

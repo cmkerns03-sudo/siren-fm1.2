@@ -5,7 +5,8 @@
 
   index.html                  redirect to the installer
   firmware/felucca-VER.fwsc   the package
-  webapp/installer/index.html index_pkg.html with fm1pkg.js, fm1ota.js and the metadata inlined
+  webapp/installer/index.html index_pkg.html with fm1pkg.js, fm1ota.js and the metadata inlined (SIREN=1, not
+                              ABYSS: index_siren.html, SIREN's own page: three steps, big text)
   webapp/editor/index.html    editor.html (+ fukiai.ttf, FUKIAI-LICENSE.txt)
   webapp/editor/clipper-editor.html  the editor in one file, for offline use (1.1, after SLOOP 2.6): its icon font
                               inlined, its links to the installer and the font licence online; opened from the disk
@@ -112,10 +113,12 @@ def main(pkg, version, out):
         raise SystemExit(f"{pkg}: identity {product!r} is not a Felucca package (FM-1_9xx)")
     if b"FELUCCA-LOADER-1" not in raw:              # marker of firmware/loader
         raise SystemExit(f"{pkg}: no Felucca update loader in it")
-    html = (HERE / "index_pkg.html").read_text(encoding="utf-8")
+    siren = os.environ.get("SIREN") == "1" and os.environ.get("ABYSS") != "1"
+    html = (HERE / ("index_siren.html" if siren else "index_pkg.html")).read_text(encoding="utf-8")   # (SIREN 0.9: its own page)
     lib = strip_module((HERE / "fm1pkg.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1ota.js").read_text(encoding="utf-8"))
-    name = f"clipper-{re.sub(r'[^A-Za-z0-9.-]', '-', version)}.fwsc"
+    base = re.sub(r'[^A-Za-z0-9.-]', '-', version)
+    name = f"{base}.fwsc" if siren and base.startswith("siren-") else f"{'siren' if siren else 'clipper'}-{base}.fwsc"
     meta = json.dumps({"version": version, "product": product, "pkg": "../../firmware/" + name,
                        "sha256": hashlib.sha256(raw).hexdigest()})   # the page checks the download against it
     for mark in ("/*LIB*/", "/*META*/"):
@@ -140,7 +143,7 @@ def main(pkg, version, out):
         notes = HERE / "beta_banner.html"
         banner = notes.read_text(encoding="utf-8") if notes.exists() else "<p><b>BETA</b></p>"
     html = html.replace("<!--BANNER-->", banner)
-    for old in list(fw.glob("felucca-*.fwsc")) + list(fw.glob("sloop-*.fwsc")) + list(fw.glob("clipper-*.fwsc")):   # one package: the current one
+    for old in list(fw.glob("felucca-*.fwsc")) + list(fw.glob("sloop-*.fwsc")) + list(fw.glob("clipper-*.fwsc")) + list(fw.glob("siren-*.fwsc")):   # one package: the current one
         old.unlink()
     shutil.copy(pkg, fw / name)
     ed_html = (HERE / "editor.html").read_text(encoding="utf-8")
@@ -154,10 +157,11 @@ def main(pkg, version, out):
         if (HERE / f).exists():
             shutil.copy(HERE / f, ed / f)
     app_files(out, version, name)
+    title = "SIREN" if siren else "Clipper"
     (out / "index.html").write_text(
-        '<!doctype html><meta charset="utf-8"><title>Clipper</title>'
+        f'<!doctype html><meta charset="utf-8"><title>{title}</title>'
         '<meta http-equiv="refresh" content="0; url=webapp/installer/">'
-        '<a href="webapp/installer/">Clipper installer</a>\n', encoding="utf-8")
+        f'<a href="webapp/installer/">{title} installer</a>\n', encoding="utf-8")
     print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, firmware/{name} ({len(raw)} B, {product})")
 
 

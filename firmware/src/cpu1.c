@@ -18,6 +18,11 @@ static volatile uint32_t cpu1_test_out;
 static int cpu1_on(void) { return cpu1_state == CPU1_OK && fm1_c1_on; }
 static uint32_t cpu1_ticks(void) { return fm1_ticks(); }
 static int cpu1_run(cpu1_job_t fn, uint32_t arg) { return cpu1_state == CPU1_OK ? fm1_cpu1_run(fn, arg) : 0; }
+static int cpu1_poll(void)
+{
+    FM1_C1_SYNC();
+    return fm1_c1_mb.done == fm1_c1_mb.job || fm1_c1_mb.bad;   /* (bad: cpu1_wait holds it at once, the caller does it) */
+}
 static int cpu1_wait(void)
 {
     if (fm1_cpu1_wait() == 0)
@@ -95,5 +100,6 @@ static const char *cpu1_label(void) { return "1 CORE"; }
 static int cpu1_on(void) { return 0; }
 static int cpu1_run(cpu1_job_t fn, uint32_t arg) { (void)fn; (void)arg; return 0; }
 static int cpu1_wait(void) { return 0; }
+static int cpu1_poll(void) { return 1; }
 static uint32_t cpu1_ticks(void) { return 0; }
 #endif
