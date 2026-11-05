@@ -44,7 +44,7 @@ static void vector_point(const track_t *t, voice_t *v, const vmod_t *m, uint32_t
 {
     const int16_t *p = t->p;
     uint32_t mv = (uint32_t)clamp(p[P_E6], 0, VM_N - 1), fast = mv && !(mv & 1u);
-    uint32_t inc = ((fast ? 6233054u : 779132u) >> CTL_LOG2) * n, ph = v->ph[1];
+    uint32_t inc = ((fast ? 6233054u : 779132u) >> CTL_LOG2) * (n << VH), ph = v->ph[1];
     int32_t x = (clamp(p[P_E4], -64, 63) + 64) * 258 + (m->shape - (64 << 8)), y = (clamp(p[P_E5], -64, 63) + 64) * 258;
     int32_t dx = 0, dy = 0;
     switch (mv) {
@@ -89,7 +89,8 @@ static void vector_point(const track_t *t, voice_t *v, const vmod_t *m, uint32_t
 static void vector_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     const int16_t *p = t->p;
-    uint32_t i, ph = v->ph[0], inc = m->inc, lv = inc < 20270000u ? 0u : inc < 81100000u ? 1u : 2u;
+    uint32_t i, ph = v->ph[0], inc = m->inc, lv = inc < (VH ? 40540000u : 20270000u) ? 0u : inc < (VH ? 162200000u : 81100000u) ? 1u : 2u;   /* (ABYSS, half
+                                                     * the rate: the copy of its own pitch, its top folding over 11 kHz quietly) */
     uint32_t sh = 23u + 2u * lv, mask = (512u >> (2u * lv)) - 1u, fsh = sh - 15u;
     const int16_t *wa = VEC_WAVE[(uint32_t)clamp(p[P_E0], 0, VEC_NW - 1)] + VEC_OFF[lv];
     const int16_t *wb = VEC_WAVE[(uint32_t)clamp(p[P_E1], 0, VEC_NW - 1)] + VEC_OFF[lv];

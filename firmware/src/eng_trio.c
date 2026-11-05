@@ -298,9 +298,9 @@ static void trio_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     /* the cutoff wanders a little, once per block (the slightly unstable filter of the chips) */
     drift += (((int32_t)(noise32(&nst) >> 22) - 512) - drift) >> 3;
     cut = clamp((p[P_E5] << 8) + m->cutoff + drift, 0, 127 << 8);
-    g = SVF_G[cut >> 8];
+    g = SVF_GV[cut >> 8];
     if ((cut >> 8) < 127)
-        g += ((SVF_G[(cut >> 8) + 1] - g) * (cut & 255)) >> 8;
+        g += ((SVF_GV[(cut >> 8) + 1] - g) * (cut & 255)) >> 8;
     a1 = (int32_t)((4096u << 13) / (uint32_t)(4096 + ((g * (g + k)) >> 12)));
     a2 = (a1 * g) >> 12;
     a3 = (a2 * g) >> 12;

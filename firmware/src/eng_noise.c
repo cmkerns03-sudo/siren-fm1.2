@@ -137,9 +137,9 @@ static void noise_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
     /* FREQ (+ FLT), key-tracked by TRK around C4, the drift: SVF cutoff units (256 an index, 0.86 st) */
     cut = (p[P_E2] << 8) + m->cutoff + (((m->pitch16 - 60 * 16) * p[P_E4] * 151) >> 10) + ((d16 * 4785) >> 8);
     cut = clamp(cut, 0, 127 << 8);
-    g = SVF_G[cut >> 8];
+    g = SVF_GV[cut >> 8];
     if (cut < (127 << 8))
-        g += ((SVF_G[(cut >> 8) + 1] - g) * (cut & 255)) >> 8;
+        g += ((SVF_GV[(cut >> 8) + 1] - g) * (cut & 255)) >> 8;
     k = 8192 - res * 7800 / 127;                      /* damping, Q12: 2.0 .. 0.1 */
     a1 = (int32_t)((4096u << 13) / (uint32_t)(4096 + ((g * (g + k)) >> 12)));
     a2 = (a1 * g) >> 12;

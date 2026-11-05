@@ -286,7 +286,12 @@ enum { PL_AP1, PL_AP2, PL_AP3, PL_AP4, PL_MA, PL_DA1, PL_AA, PL_DA2, PL_MB, PL_D
 static const uint16_t PL_LEN[PL_N] = {PLQ(105u), PLQ(79u), PLQ(281u), PLQ(205u), PLQ(498u) + PL_EXC + 2, PLQ(3299u),
                                       PLQ(1334u), PLQ(2756u), PLQ(673u) + PL_EXC + 2, PLQ(3124u), PLQ(1968u),
                                       PLQ(2343u), PLQ(2206u)};
+#if ABYSS                                 /* (0.1.5: the quarter rate's lines, half the RAM: 18.9 KB, given to abyss_ens) */
+#define PL_TOTAL (PLQ(105u) + PLQ(79u) + PLQ(281u) + PLQ(205u) + PLQ(498u) + PL_EXC + 2 + PLQ(3299u) + PLQ(1334u) + \
+                  PLQ(2756u) + PLQ(673u) + PL_EXC + 2 + PLQ(3124u) + PLQ(1968u) + PLQ(2343u) + PLQ(2206u))
+#else
 #define PL_TOTAL (105 + 79 + 281 + 205 + 512 + 3299 + 1334 + 2756 + 687 + 3124 + 1968 + 2343 + 2206)
+#endif
 static int16_t pl_buf[PL_TOTAL] __attribute__((section(".pool")));
 static struct {
     uint16_t base[PL_N], w[PL_N];
@@ -793,7 +798,7 @@ static int djf_block(djf_t *f, int32_t v, tsvf_t *c)
         f->mode = 0;                                    /* fully open again: off */
         return 0;
     }
-    tsvf_coef(c, f->cut, 40);
+    tsvf_coef_fs(c, f->cut, 40);
     return 1;
 }
 /* n samples of channel ch through the filter (x within +-140000) */
@@ -1192,6 +1197,114 @@ static __attribute__((noinline)) int juno_chorus(track_t *t, int32_t *b, uint32_
 }
 #endif
 
+#if ABYSS
+/* ---- (ABYSS 0.1.5) the ensemble of a part: the movement STRINGS (its three BBD taps) and HYBRID's SUPER (its six
+ * detuned saws) gave each voice, given once to the voices' sum, as the 1970s string machines had it (one ensemble
+ * after all the keys). One line a part (and one for SPREAD's side), three taps whose delays a slow (~0.6 Hz) and a
+ * fast (~6 Hz) LFO move, 120 degrees apart: the sum and two taps, 1.2 .. 5.3 ms back, the pitch moving as the
+ * voices' taps did (ENS the depth, RATE the speed); STRINGS x 1.1, SUPER x 0.6. SPREAD's side: x 2.5 (as loud). 1 KB a part (.pool);
+ * off for every other sound */
+#define EN_LEN 256u                     /* 5.8 ms (a power of 2: masked) */
+#define EN_SUPER_G 19661                /* SUPER: (the voice + two taps) x 0.6, as loud as the seven saws (measured) */
+#define EN_STR_G 36045                  /* STRINGS: x 1.1, as loud as its voices' three taps (measured) */
+typedef struct {
+    uint32_t ph[2];                     /* the slow and the fast LFO */
+    uint16_t wp;
+    uint8_t mode;                       /* 1 STRINGS, 2 SUPER */
+    int32_t line[EN_LEN];               /* the voices' sum */
+} en_t;
+static en_t ens[NPART] __attribute__((section(".pool")));
+#define EN_ON(t) ens[(uint32_t)((t) - trk) % NPART].mode   /* (its delayed taps run out after the last voice) */
+static int en_mode(const track_t *t, int32_t *depth, uint32_t *rk)
+{
+    uint32_t k, part = (uint32_t)(t - trk) % NPART;
+    if (t->engine == ENGI_STRINGS) {
+        *depth = clamp(t->p[P_E3], 0, 127);
+        *rk = 8192u + (uint32_t)clamp(t->p[P_E5], 0, 127) * 448u;   /* (eng_strings.c strings_block's) */
+        return 1;
+    }
+    if (t->engine == ENGI_HYBRID)
+        for (k = 0; k < HY_NOSC; k++)
+            if (hy_cur[part].osc[k].type == HO_SUPER) {
+                *depth = 64 + (hy_cur[part].osc[k].shape >> 1);   /* (the detune: SHP) */
+                *rk = 8192u + 50u * 448u;
+                return 2;
+            }
+    return 0;
+}
+/* the tap k's delay (Q16 samples) at the LFOs' phases a, b */
+static inline uint32_t en_delay(uint32_t a, uint32_t b, uint32_t k, int32_t depth)
+{
+    int32_t s = osc_sine(a + k * 0x55555555u) * 88 + osc_sine(b + k * 0x55555555u) * 3;   /* x 2 ms, x 0.06 ms */
+    return (uint32_t)((141 << 16) + s * depth * 2 / 127);   /* 3.2 ms + (s / 32768) x 2 ms x ENS (within 32 bits) */
+}
+static void abyss_ens(track_t *t, int32_t *b, uint32_t n, uint32_t h)   /* (h: at half the rate, n / 2 samples) */
+{
+    en_t *e = &ens[(uint32_t)(t - trk) % NPART];
+    int32_t depth = 0, g;
+    uint32_t rk = 0, i, d1, d2, s1, s2, i0, i1, wp, nb = n << h;
+    int32_t *line = e->line;
+    int m = en_mode(t, &depth, &rk);
+    if (m != e->mode) {                                 /* (a new sound: the line from silence) */
+        memset(e->line, 0, sizeof e->line);
+        e->mode = (uint8_t)m;
+    }
+    if (!m)
+        return;
+    i0 = (uint32_t)(((uint64_t)58000u * rk) >> 15), i1 = (uint32_t)(((uint64_t)584000u * rk) >> 15);   /* a sample */
+    d1 = en_delay(e->ph[0], e->ph[1], 1u, depth) >> h, d2 = en_delay(e->ph[0], e->ph[1], 2u, depth) >> h;
+    e->ph[0] += i0 * nb, e->ph[1] += i1 * nb;
+    s1 = (uint32_t)((int32_t)((en_delay(e->ph[0], e->ph[1], 1u, depth) >> h) - d1) >> (CTL_LOG2 - h));   /* (gliding) */
+    s2 = (uint32_t)((int32_t)((en_delay(e->ph[0], e->ph[1], 2u, depth) >> h) - d2) >> (CTL_LOG2 - h));
+    g = m == 2 ? EN_SUPER_G : EN_STR_G;
+    wp = e->wp;
+    for (i = 0; i < n; i++, d1 += s1, d2 += s2) {
+        int32_t in = b[i], a, y;
+        uint32_t r;
+        line[wp] = in;
+        r = (wp - (d1 >> 16)) & (EN_LEN - 1u), a = line[r];
+        y = in + a + (((line[(r - 1u) & (EN_LEN - 1u)] - a) * (int32_t)((d1 >> 8) & 255u)) >> 8);
+        r = (wp - (d2 >> 16)) & (EN_LEN - 1u), a = line[r];
+        y += a + (((line[(r - 1u) & (EN_LEN - 1u)] - a) * (int32_t)((d2 >> 8) & 255u)) >> 8);
+        b[i] = (int32_t)(((int64_t)y * g) >> 15);
+        wp = (wp + 1u) & (EN_LEN - 1u);
+    }
+    e->wp = (uint16_t)wp;
+    if (part_side_on)                                   /* (SPREAD's side: as loud as the three copies of the mid) */
+        for (i = 0; i < n; i++)
+            part_side[i] = (int32_t)(((int64_t)part_side[i] * (g * 5 / 2)) >> 15);
+}
+/* (0.1.5) a slow layer rendered at half the rate (voice.c track_render: n / 2 samples in b[0..]) back to the full rate:
+ * each sample, then the one between (6-point interpolation: 150, -25, 3 / 256 each side; -60 dB at 2 kHz, the
+ * images over 11 kHz under -30 dB at 5 kHz), 3 half-rate samples (0.14 ms) later. The side the same */
+static int32_t hr_hist[NPART][2][5];
+static void abyss_up1(int32_t *b, uint32_t n, int32_t *hist)
+{
+    int32_t z[5 + CTL / 2];
+    uint32_t j, h = n >> 1;
+    for (j = 0; j < 5u; j++)
+        z[j] = hist[j];
+    for (j = 0; j < h; j++)
+        z[5u + j] = b[j];
+    for (j = 0; j < h; j++) {
+        const int32_t *q = &z[j + 2u];
+        b[2u * j] = q[0];
+        b[2u * j + 1u] = (150 * (q[0] + q[1]) - 25 * (q[-1] + q[2]) + 3 * (q[-2] + q[3]) + 128) >> 8;
+    }
+    for (j = 0; j < 5u; j++)
+        hist[j] = z[h + j];
+}
+static void abyss_up(track_t *t, int32_t *b, uint32_t n)
+{
+    uint32_t pi = (uint32_t)(t - trk) % NPART;
+    abyss_up1(b, n, hr_hist[pi][0]);
+    if (part_side_on)
+        abyss_up1(part_side, n, hr_hist[pi][1]);
+}
+#else
+#define EN_ON(t) 0
+#endif
+
 /* (0.7, SLOOP 2.7's, after JIANT FM 0.6.8, github.com/juanjiant-bit/JIANT) LEVEL and PAN glide: a knob's detent (or a
  * new sound's trim) moves a quarter of the way each block of CTL samples (0.73 ms), ~3 ms in all, instead of a step a
  * detent. The last few units: at once */
@@ -1304,7 +1417,7 @@ static void mix_part1(track_t *t, uint32_t n)
     if (track_render(t, b, n))
         t->tail = t->p[P_ITYPE] ? 64 : 16, t->ins_xt = 0;  /* blocks of DIST / INSERT state to run out after the last
                                                          * voice (the INSERT's: 46 ms, a flanger's feedback) */
-    else if ((!t->tail || !(t->p[P_DIST] | t->p[P_ITYPE] | jc[(uint32_t)(t - trk) % NPART].w) || !--t->tail) &&
+    else if ((!t->tail || !(t->p[P_DIST] | t->p[P_ITYPE] | jc[(uint32_t)(t - trk) % NPART].w | EN_ON(t)) || !--t->tail) &&
              !slicer_busy(t) &&
              !(t->ins_run && t->ins_res > 16u && t->ins_xt < 255u && ++t->ins_xt)) {   /* (the INSERT's DC blocker
                                                          * run out first, up to 255 blocks more: no step) */
@@ -1322,6 +1435,14 @@ static void mix_part1(track_t *t, uint32_t n)
     else if ((!t->tail || !t->p[P_DIST] || !--t->tail) && !slicer_busy(t)) {
         slicer_track(t, 0, n);                          /* (the SLICER's step clock runs on) */
         return;
+    }
+#endif
+#if ABYSS
+    {   /* (0.1.5) STRINGS' and SUPER's ensemble, the part's; a slow layer back to the full rate */
+        uint32_t h = hr_on[(uint32_t)(t - trk) % NPART];
+        abyss_ens(t, b, n >> h, h);
+        if (h)
+            abyss_up(t, b, n);
     }
 #endif
 #if CLIPPER_SYNTH
@@ -1692,11 +1813,17 @@ static void mix_block(int32_t *out, uint32_t n)
          * quarter of the work, which core 1 waited out before) on core 1, while this one starts this block's parts;
          * then the parts' voices split over both, as before. The output is the last block's, as it was, one block (32
          * samples, 0.7 ms) later; the first block of all is silence */
-        static const uint8_t FIRST[4] = {0, 1, 2, 5}, LAST[2] = {3, 4};
 #if ABYSS
-        const uint32_t during = 1u, c1drums = 0u;   /* (the parts this core renders alone while core 1 runs the tail:
-                                       * ABYSS the drone; then the pad, the low, the swell, the drums (here: rare and
-                                       * light), the melody, the bells, split) */
+        static const uint8_t FIRST[4] = {0, 2, 1, 5}, LAST[2] = {3, 4};   /* (0.1.5: the drone and the low, few voices,
+                                       * during the tail; then the pad and the swell, their chords split) */
+#else
+        static const uint8_t FIRST[4] = {0, 1, 2, 5}, LAST[2] = {3, 4};
+#endif
+#if ABYSS
+        const uint32_t during = 2u, c1drums = 0u;   /* (the parts this core renders alone while core 1 runs the tail:
+                                       * ABYSS (0.1.5) the drone and the low, at half the rate (the tail's filters keep
+                                       * the full rate's: dsp.c tsvf_coef_fs); then the pad, the swell, the drums (here:
+                                       * rare and light), the melody, the bells, split) */
 #else
         const uint32_t during = 4u, c1drums = 1u;   /* (SIREN: its one-voice layers, the bass, the arp, the hook, the fx,
                                        * while core 1 runs the tail, then the drums as before; then the pad and the

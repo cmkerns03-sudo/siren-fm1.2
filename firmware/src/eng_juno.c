@@ -60,10 +60,10 @@ static void juno_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         s = s * 5 >> 3;                              /* (four sources: headroom) */
         if (hpf != 1u) {                             /* 0: bass boost (a low shelf ~120 Hz); 2, 3: a one-pole high-pass */
             if (!hpf) {
-                bb += ((s - bb) * 560) >> 15;
+                bb += ((s - bb) * (560 << VH)) >> 15;     /* (ABYSS: x 2 at half the rate) */
                 s += bb >> 1;
             } else {
-                hp += ((s - hp) * (hpf == 2u ? 1120 : 3360)) >> 15;
+                hp += ((s - hp) * ((hpf == 2u ? 1120 : 3360) << VH)) >> 15;
                 s -= hp;
             }
         }

@@ -42,9 +42,10 @@ static void strings_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, con
     int32_t acc[CTL];                                /* (0.7: on the stack: two cores) */
     uint32_t part = (uint32_t)(t - trk) % NPART, i, k;
 #if ABYSS
-    /* (ABYSS 0.1.4, lighter: two taps, half a turn apart, each x 1.3: as loud as the three, measured) */
-    int32_t g16 = p[P_E0] * 44, g8 = p[P_E1] * 44, g4 = p[P_E2] * 44;
-    const uint32_t NTAP = 2u, TAP_PH = 0x80000000u;
+    /* (ABYSS 0.1.5) one tap a voice, at its pitch: the ensemble's three moving taps are the part's (fx.c abyss_ens, on
+     * the voices' sum, as the 1970s machines had it: one BBD ensemble after all the keys) */
+    int32_t g16 = p[P_E0] * 34, g8 = p[P_E1] * 34, g4 = p[P_E2] * 34;
+    const uint32_t NTAP = 1u, TAP_PH = 0u;
 #else
     int32_t g16 = p[P_E0] * 34, g8 = p[P_E1] * 34, g4 = p[P_E2] * 34;  /* Q15 / 7.5 (three taps, three
                                                                          * registers: headroom for chords) */
@@ -59,7 +60,7 @@ static void strings_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, con
     for (k = 0; k < NTAP; k++) {
         /* the tap's pitch: the slow and the fast LFO, 120 degrees on; up to ~+-14 cents and ~+-4 cents at ENS 127 */
         int32_t s1 = osc_sine(str_lfo[part][0] + k * TAP_PH), s2 = osc_sine(str_lfo[part][1] + k * TAP_PH);
-        int32_t dq = ((s1 * 14 + s2 * 4) >> 4) * ens;                   /* cents x 127 x 2048 */
+        int32_t dq = ABYSS ? 0 : ((s1 * 14 + s2 * 4) >> 4) * ens;      /* cents x 127 x 2048 */
         int32_t fq = dq * 38 / 260096;                                  /* the pitch factor - 1, Q16 (~38 a cent) */
         uint32_t inc = inc16 + (uint32_t)(((int64_t)(int32_t)inc16 * fq) >> 16), ph = v->ph[k];
         for (i = 0; i < n; i++, ph += inc) {

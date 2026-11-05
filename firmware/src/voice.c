@@ -1207,7 +1207,7 @@ static void vrender(track_t *t, const engine_t *e, voice_t *v, int32_t *out, uin
         tmp[i] = 0;
     e->render(t, v, tmp, n, m);
     for (i = 0; i < n; i++) {
-        int32_t g = g0 + (((g1 - g0) * (int32_t)i) >> CTL_LOG2);
+        int32_t g = g0 + (((g1 - g0) * (int32_t)i) >> V_LOG2);
         out[i] += tmp[i];
         side[i] += ((tmp[i] >> 4) * g) >> 11;          /* (>> 4 first: 32 bits) */
     }
@@ -1294,6 +1294,27 @@ static int32_t uni_level(const track_t *t)
     return vm == V_UNISON ? (trk_nvoice(t) >= NVOICE ? 11796 : 16384) : vm == V_PUNI4 ? 16384 : vm == V_PUNI2 ? 22938 : 32767;
 }
 #endif
+#if ABYSS
+/* (0.1.5) the slow layers at half the rate: the drone, the pad, the low and the swell (parts 1, 2, 3, 6), the engines that
+ * render the same there (tests/abyss/half_test.c: each sound of those layers, both ways); hr_on: this block's (fx.c
+ * abyss_up brings the part back to the full rate) */
+static uint8_t hr_on[NPART], abyss_half_off;
+static int abyss_half_part(const track_t *t, const engine_t *e)
+{
+    static int16_t glass = -2;                          /* HYBRID GLASS PAD: its shine is over 8 kHz (7 % of it): full rate */
+    uint32_t pi = (uint32_t)(t - trk), k;
+    if (abyss_half_off || !(pi == 0u || pi == 1u || pi == 2u || pi == 5u))
+        return 0;
+    if (glass == -2)
+        for (glass = -1, k = 0; k < ENG_HYBRID.npresets; k++)
+            if (str_eq(ENG_HYBRID.presets[k].name, "GLASS PAD"))
+                glass = (int16_t)k;
+    if (e == &ENG_HYBRID && (int32_t)t->preset == glass)
+        return 0;
+    return e != &ENG_GRAIN && e != &ENG_SAMPLE && e != &ENG_FORMANT;   /* (GRAIN: its grains in samples; SAMPLE: its zones;
+                                                     * VOICE: its formants and glottis) */
+}
+#endif
 static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
 {
     const engine_t *e = ENGINES[t->engine];
@@ -1378,6 +1399,20 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
         sv[MS_MAC1] = mac1 * 512, sv[MS_MAC2] = mac2 * 512;
         sv[MS_MAC3] = mac3 * 258, sv[MS_MAC4] = clamp(p[P_MAC4], 0, 127) * 258;
     }
+#endif
+#if ABYSS
+    uint32_t nr_n = n;                                  /* (0.1.5) the samples the voices render: n, or n / 2 */
+    {
+        uint32_t pi = (uint32_t)(t - trk);
+        hr_on[pi % NPART] = (uint8_t)(pi < NPART && n == CTL && abyss_half_part(t, e));
+        if (hr_on[pi % NPART]) {
+            if (!svf_gh[127])
+                svf_gh_init();
+            v_half = 1, nr_n = n >> 1;
+        }
+    }
+#else
+#define nr_n n
 #endif
     if (e->block)                                       /* the engine's per-part work (DRAWBAR: bars, rotor) */
         e->block(t);
@@ -1616,7 +1651,7 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
                     t->p[P_E0 + k] = (int16_t)clamp(keep[k] + ((clamp(med[k], -32767, 32767) * (d->max - d->min)) >> 15),
                                                      d->min, d->max);
             }
-            vrender(t, e, v, out, n, &m, sided ? (VS_POS[i % 16u] * spr0 * 23) >> 12 : 0,
+            vrender(t, e, v, out, nr_n, &m, sided ? (VS_POS[i % 16u] * spr0 * 23) >> 12 : 0,
                     sided ? (VS_POS[i % 16u] * spr * 23) >> 12 : 0, part_side, vs_tmp[0]);
             for (k = 0; k < 8u; k++)
                 t->p[P_E0 + k] = keep[k];
@@ -1631,17 +1666,22 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
             nr++;
             continue;
         }
-        vrender(t, e, v, out, n, &m, sided ? (VS_POS[i % 16u] * spr0 * 23) >> 12 : 0,
+        vrender(t, e, v, out, nr_n, &m, sided ? (VS_POS[i % 16u] * spr0 * 23) >> 12 : 0,
                 sided ? (VS_POS[i % 16u] * spr * 23) >> 12 : 0, part_side, vs_tmp[0]);
         nr++;
         continue;
 #endif
-        e->render(t, v, out, n, &m);
+        e->render(t, v, out, nr_n, &m);
         nr++;
     }
 #if CLIPPER_SYNTH
     if (split)
-        vs_finish(t, e, out, n);
+        vs_finish(t, e, out, nr_n);
+#endif
+#if ABYSS
+    v_half = 0;
+#else
+#undef nr_n
 #endif
 #if CLIPPER_SYNTH
     {   /* the matrix's PAN (fx.c mix_part): to the newest note's, 4 steps a block at most (no click) */

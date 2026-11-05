@@ -156,8 +156,8 @@ static void punch_process(int32_t *l, int32_t *r, uint32_t n)
             punch.cut = punch.cut > (34 << 8) ? punch.cut - 96 : 34 << 8;   /* closes over ~1 s */
         if (fx == PX_HPF && punch.g > 0)
             punch.cut = punch.cut > (88 << 8) ? punch.cut - 64 : 88 << 8;
-        tsvf_coef(&c1, fx == PX_LPF ? punch.cut : fx == PX_HPF ? (127 << 8) - punch.cut + (40 << 8) : 96 << 8, 90);
-        tsvf_coef(&c2, 58 << 8, 40);                  /* PHONE: low cut ~ 500 Hz */
+        tsvf_coef_fs(&c1, fx == PX_LPF ? punch.cut : fx == PX_HPF ? (127 << 8) - punch.cut + (40 << 8) : 96 << 8, 90);
+        tsvf_coef_fs(&c2, 58 << 8, 40);                  /* PHONE: low cut ~ 500 Hz */
     }
     for (i = 0; i < n; i++) {
         int32_t x = l[i], y = r[i], wl = x, wr = y, m = (x + y) >> 1;

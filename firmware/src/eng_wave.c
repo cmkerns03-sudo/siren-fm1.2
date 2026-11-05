@@ -217,10 +217,11 @@ static void wave_note_on(track_t *t, voice_t *v)
     }
 }
 
-/* the copy for an increment: the most harmonics under 0.45 FS (128 >> l <= 0.45 2^32 / inc) */
+/* the copy for an increment: the most harmonics under 0.45 FS (128 >> l <= 0.45 2^32 / inc) (ABYSS, at half the rate:
+ * under 0.75 FS there, the octave of copies kept, its top folding over 11 kHz quietly) */
 static inline uint32_t wt_level(uint32_t inc)
 {
-    uint32_t r = inc ? 1932735283u / inc : 1000u, l = 0;
+    uint32_t r = inc ? (VH ? 3221225472u : 1932735283u) / inc : 1000u, l = 0;
     while (l < WT_LEVELS - 1u && (128u >> l) > r)
         l++;
     return l;
@@ -277,7 +278,7 @@ static void wave_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     inc2 = inc1 + (uint32_t)(((uint64_t)inc1 * (uint32_t)(det * 38)) >> 16);
     for (i = 0; i < n; i++) {
         acc[i] = 0;
-        pos[i] = p0 + (((p1 - p0) * (int32_t)i) >> CTL_LOG2);
+        pos[i] = p0 + (((p1 - p0) * (int32_t)i) >> V_LOG2);
     }
     wave_osc(acc, n, &v->ph[0], inc1, pos, det ? 16384 : 32767);
     if (det)

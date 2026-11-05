@@ -209,10 +209,10 @@ static void drawbar_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, con
         int32_t g1 = T->g[k], g0 = V->gp[k], r;
         if ((int32_t)k == T->pk)
             g1 += mulq15(T->plev, perc1);
-        while (x > DRW_FOLD_LIM[k])                     /* fold back above ~6 kHz */
+        while ((x >> VH) > DRW_FOLD_LIM[k])            /* fold back above ~6 kHz (ABYSS: x doubled at half the rate) */
             x >>= 1;
         inc = drw_ratio(k, x);
-        r = inc < DRW_XOVER;                            /* 1: the low rotor */
+        r = (inc >> VH) < DRW_XOVER;                    /* 1: the low rotor */
         g1 = mulq15(g1, T->am[r]);
         inc += (uint32_t)((int32_t)(inc >> 16) * T->fm[r]);
         V->gp[k] = g1;
@@ -226,11 +226,11 @@ static void drawbar_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, con
                 acc[i] += (SINE[ph >> 22] * g1) >> 15;
             }
         } else {                                        /* gain ramp over the block (CTL = 32) */
-            int32_t gq = g0 << 5, dg = g1 - g0;
+            int32_t gq = g0 << V_LOG2, dg = g1 - g0;
             for (i = 0; i < n; i++) {
                 ph += inc;
                 gq += dg;
-                acc[i] += (SINE[ph >> 22] * (gq >> 5)) >> 15;
+                acc[i] += (SINE[ph >> 22] * (gq >> V_LOG2)) >> 15;
             }
         }
         V->ph[k] = ph;

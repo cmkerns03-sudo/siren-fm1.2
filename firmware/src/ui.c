@@ -6,7 +6,7 @@
 #define UI_SMALL                                   /* (gfx.c: minsize on the device; a test alone: nothing) */
 #endif
 #if SIREN && ABYSS && !defined(FELUCCA_VERSION)
-#define FELUCCA_VERSION "ABYSS 0.1.4 EXP"   /* ABYSS: ambient that writes itself (abyss.c) */
+#define FELUCCA_VERSION "ABYSS 0.1.5 EXP"   /* ABYSS: ambient that writes itself (abyss.c) */
 #elif SIREN && !defined(FELUCCA_VERSION)
 #define FELUCCA_VERSION "SIREN 0.8.2 EXP"   /* SIREN: a rave that writes itself (siren.c) */
 #endif

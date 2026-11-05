@@ -6,6 +6,32 @@
 #define VOICE_FS 24000           /* per-voice level: one voice peaks near -6 dBFS before the master */
 
 static inline int32_t mulq15(int32_t a, int32_t b) { return (a * b) >> 15; }
+#if ABYSS
+/* (ABYSS 0.1.5) the slow layers' voices at half the rate (22.05 kHz; voice.c track_render, fx.c abyss_up): while a part
+ * renders them, v_half is 1 (on the core that renders them, and on core 1 for its share: fx.c keeps the master's tail
+ * off core 1 meanwhile): the oscillators' increments doubled (pitch_inc), the filters' gains for the same cutoffs at the
+ * lower rate (SVF_GV: g' = tan 2 theta, up to the table's top, 8 kHz there), the amplitude ramps over CTL / 2 */
+static uint8_t v_half;
+static uint16_t svf_gh[128];
+static void svf_gh_init(void)
+{
+    uint32_t i;
+    for (i = 0; i < 128u; i++) {
+        uint32_t g = SVF_G[i], h;                       /* 2 g / (1 - g^2), Q12 (32 bits: no 64-bit divide on the FM-1) */
+        h = g >= 3900u ? 8907u : (2u * g << 12) / ((16777216u - g * g) >> 12);
+        svf_gh[i] = (uint16_t)(h > 8907u ? 8907u : h);
+    }
+}
+#define SVF_GV (v_half ? svf_gh : SVF_G)
+static inline uint32_t pitch_inc_v(uint32_t p) { return pitch_inc(p) << v_half; }
+#define pitch_inc pitch_inc_v
+#define V_LOG2 (CTL_LOG2 - v_half)
+#define VH v_half
+#else
+#define SVF_GV SVF_G
+#define V_LOG2 CTL_LOG2
+#define VH 0u
+#endif
 /* a * k / 65536 without 64-bit: a up to 2^31, k Q16 */
 static inline int32_t mulq16(int32_t a, uint32_t k)
 {
@@ -117,19 +143,24 @@ static inline uint32_t noise32(int32_t *st)
 /* Trapezoidal SVF (A. Simper), unconditionally stable. Coefficients per
  * block in Q13; signals stay within +-150000 so products fit in 32 bits. */
 typedef struct { int32_t a1, a2, a3; } tsvf_t;
-static inline void tsvf_coef(tsvf_t *c, int32_t cut, int32_t reso)   /* cut: 0..127 << 8 */
+static inline void tsvf_coef_g(tsvf_t *c, int32_t cut, int32_t reso, const uint16_t *G)
 {
     int32_t i, g, den, k = 8192 - reso * 7600 / 127;   /* damping 2.0 .. ~0.15 (Q12) */
     cut = clamp(cut, 0, 127 << 8);
     i = cut >> 8;
-    g = SVF_G[i];
+    g = G[i];
     if (i < 127)                                       /* between table points: sweeps without 128 steps */
-        g += ((SVF_G[i + 1] - g) * (cut & 255)) >> 8;
+        g += ((G[i + 1] - g) * (cut & 255)) >> 8;
     den = 4096 + ((g * (g + k)) >> 12);
     c->a1 = (int32_t)((4096u << 13) / (uint32_t)den);
     c->a2 = (c->a1 * g) >> 12;
     c->a3 = (c->a2 * g) >> 12;
 }
+
+static inline void tsvf_coef(tsvf_t *c, int32_t cut, int32_t reso) { tsvf_coef_g(c, cut, reso, SVF_GV); }   /* cut 0..127 << 8 */
+/* (ABYSS 0.1.5) the master's and the parts' own filters (fx.c, punch.c): always the full rate, whatever core 0's voices
+ * render at meanwhile (core 1 runs the master's tail while core 0 renders the drone at half the rate) */
+static inline void tsvf_coef_fs(tsvf_t *c, int32_t cut, int32_t reso) { tsvf_coef_g(c, cut, reso, SVF_G); }
 
 static inline int32_t tsvf_lp(const tsvf_t *c, int32_t in, int32_t *ic1, int32_t *ic2)
 {
@@ -156,9 +187,9 @@ static inline void ladder_coef(ladder_t *c, int32_t cut, int32_t res)   /* cut 0
     int32_t i, g, G, G2;
     cut = clamp(cut, 0, 127 << 8);
     i = cut >> 8;
-    g = SVF_G[i];
+    g = SVF_GV[i];
     if (i < 127)
-        g += ((SVF_G[i + 1] - g) * (cut & 255)) >> 8;
+        g += ((SVF_GV[i + 1] - g) * (cut & 255)) >> 8;
     g = clamp(g, 1, 3 * 4096);
     G = (int32_t)(((uint32_t)g << 16) / (uint32_t)(4096 + g));   /* g / (1 + g) */
     G2 = mul_sh(G, G, 16);
@@ -228,9 +259,9 @@ static inline int32_t fmod_g(int32_t cut)              /* the prewarped gain g (
     int32_t i, g;
     cut = clamp(cut, 0, 127 << 8);
     i = cut >> 8;
-    g = SVF_G[i];
+    g = SVF_GV[i];
     if (i < 127)
-        g += ((SVF_G[i + 1] - g) * (cut & 255)) >> 8;
+        g += ((SVF_GV[i + 1] - g) * (cut & 255)) >> 8;
     return clamp(g, 1, 3 * 4096);
 }
 static inline void fmod_coef(fmod_t *f, int32_t model, int32_t cut, int32_t res)   /* cut 0..127 << 8, res 0..127 */
@@ -335,5 +366,5 @@ static inline int32_t fmod_tick(const fmod_t *f, int32_t x, int32_t *sv, int32_t
 static inline int32_t amp_at(const vmod_t *m, uint32_t i)
 {
     int32_t x = (m->amp1 - m->amp0) * (int32_t)i;
-    return m->amp0 + ((x + ((x >> 31) & (CTL - 1))) >> CTL_LOG2);
+    return m->amp0 + ((x + ((x >> 31) & ((1 << V_LOG2) - 1))) >> V_LOG2);   /* (ABYSS: CTL / 2 at half the rate) */
 }

@@ -164,9 +164,9 @@ static inline void hsvf_coef(hsvf_t *c, int32_t cut, int32_t k)   /* cut 0..127 
     int32_t i, g, den;
     cut = clamp(cut, 0, 127 << 8);
     i = cut >> 8;
-    g = SVF_G[i];
+    g = SVF_GV[i];
     if (i < 127)
-        g += ((SVF_G[i + 1] - g) * (cut & 255)) >> 8;
+        g += ((SVF_GV[i + 1] - g) * (cut & 255)) >> 8;
     den = 4096 + ((g * (g + k)) >> 12);
     c->a1 = (int32_t)((4096u << 13) / (uint32_t)den);
     c->a2 = (c->a1 * g) >> 12;
@@ -419,6 +419,12 @@ static void hy_osc_run(const hy_osc_t *o, hy_voice_t *hv, uint32_t k, uint32_t i
         break;
     }
     case HO_SUPER: {
+#if ABYSS
+        /* (ABYSS 0.1.5) the centre saw alone: the spread of the six others is the part's ensemble (fx.c abyss_ens) */
+        for (i = 0; i < n; i++, ph += inc)
+            y[i] = hy_saw(ph, inc);
+        break;
+#else
         int32_t d = super_detune((uint32_t)sh >> 8), dq = d >> 1;          /* dq: 0..32768 */
         /* the centre saw's level falls and the side saws' rises with the detune (Szabo's fits, simplified) */
         int32_t cg = 32767 - mulq15(dq, 18000), sg = 2000 + mulq15(dq, 16000);
@@ -429,24 +435,16 @@ static void hy_osc_run(const hy_osc_t *o, hy_voice_t *hv, uint32_t k, uint32_t i
                                                       * 0.7: on the stack, the voices render on two cores) */
         for (i = 0; i < n; i++)
             acc[i] = 0;
-#if ABYSS
-        for (j = 0; j < HY_SUPER - 1u; j += j == 2u ? 3u : 2u) {   /* (ABYSS 0.1.4, lighter: three side saws, the two
-                                                      * outer ones and one inside, x sqrt 2: as loud as the six) */
-#else
         for (j = 0; j < HY_SUPER - 1u; j++) {
-#endif
             uint32_t q = hv->sph[k][j], qi = sinc[j];
             for (i = 0; i < n; i++, q += qi)
                 acc[i] += hy_saw(q, qi);
             hv->sph[k][j] = q;
         }
         for (i = 0; i < n; i++, ph += inc)           /* (six saws at sg / 2 each: the sum stays in range) */
-#if ABYSS
-            y[i] = mulq15(hy_saw(ph, inc), cg) + mulq15((acc[i] * 181) >> 8, sg);
-#else
             y[i] = mulq15(hy_saw(ph, inc), cg) + mulq15(acc[i] >> 1, sg);
-#endif
         break;
+#endif
     }
     case HO_FM: {                                    /* phase modulation by the buffer before, up to ~2 cycles */
         int32_t g = sh >> 8;
@@ -871,12 +869,12 @@ static void hybrid_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, cons
     gain = mulq15(clamp((int32_t)P->level * 328, 0, 41600), clamp(32767 + md[HD_AMP], 0, 32767));
     {
         int32_t h0 = mulq15(mulq15(m->amp0, gain), VOICE_FS), h1 = mulq15(mulq15(m->amp1, gain), VOICE_FS);
-        int32_t hq = h0 << CTL_LOG2, dh = h1 - h0;
+        int32_t hq = h0 << V_LOG2, dh = h1 - h0;
         for (i = 0; i < n; i++, hq += dh) {
             int32_t y = a[i];
             if (y > 16000 || y < -16000)
                 y = soft_knee(y, 16000);
-            out[i] += (y * (hq >> CTL_LOG2)) >> 13;
+            out[i] += (y * (hq >> V_LOG2)) >> 13;
         }
     }
 }

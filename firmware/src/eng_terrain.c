@@ -44,7 +44,7 @@ static void terrain_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, con
     tsvf_t flt;
     if (p[P_E5]) {                                   /* DRIFT: the centre round a circle an eighth of the surface wide */
         uint32_t dinc = (uint32_t)p[P_E5] * (uint32_t)p[P_E5] * 6u + 2400u;   /* per sample: ~0.03 .. ~1 Hz */
-        v->ph[1] += dinc * n;
+        v->ph[1] += dinc * (n << VH);                  /* (ABYSS: n at half the rate) */
         cx += (uint32_t)(osc_sine(v->ph[1]) * 16384);
         cy += (uint32_t)(osc_sine(v->ph[1] + 0x40000000u) * 16384);
     }
