@@ -7,7 +7,7 @@ Free and open source (GPL-3.0). Built on <a href="https://github.com/isod89/clip
 
 ---
 
-> **Status: 0.9.1, experimental.** SIREN passes its whole test suite on a computer and is being tested on the FM-1.
+> **Status: 0.9.2, experimental.** SIREN passes its whole test suite on a computer and is being tested on the FM-1.
 > If something crackles or sounds wrong, open an issue with the style and what the screen shows (the CPU % at the
 > bottom, ECO at the top). Install it at your own risk. You can go back to the official firmware (V16 or V15) from the
 > installer page, or to Clipper or SLOOP with their own installers.
@@ -31,7 +31,7 @@ keyboard to take any layer into your own hands.
 - **Pro risers**: five kinds (AIR RISE, UPLIFTER, SHIMMER UP, SAW SWEEP, WASH RISE) that open and climb to the drop,
   then fall away.
 - **Both cores of the FM-1**, the room reverb and the pad at half the rate: light enough to play a whole set.
-- **16 seeds** to keep the tracks you love; a seed plays the same track again.
+- **16 seeds** to keep the tracks you love, kept over a restart; a seed plays the same track again.
 
 ## The controls
 
@@ -66,7 +66,7 @@ while they wait): BREAK, BUILD 4, BUILD 16, DROP, FILL, NEW MELODY, NEW BASS, NE
 | SEL | the style | 1-8 the styles (on the next phrase; the same key again: right now), 9 ALL SOUNDS, 16 keep this style |
 | ENV | the track's form | 1-11 BREAK ... STAY (as the black keys) |
 | LFO | the mixer | 1-7 the layer, 9-15 its on / off, 16 every strip back to flat; the knobs VOLUME, FILTER, SPACE, VARIATION |
-| SAVE | 16 seeds | an empty key keeps the track playing; a kept one, tapped, plays it again; held, the one playing takes its place |
+| SAVE | 16 seeds | an empty key keeps the track playing; a kept one, tapped, plays it again; held, the one playing takes its place. They stay after a restart: written to the FM-1's memory when the music is stopped (KEPT: SAVED AT STOP, then SEEDS SAVED) |
 | GLO | the settings | K1 TENSION, K2 MUTATION, K3 INTENSITY, K4 MELODY; 1 keep the style, 2 a flat mix, 3 every layer given back; and a reminder of every button |
 
 ## Install

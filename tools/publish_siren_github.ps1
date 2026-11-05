@@ -1,17 +1,17 @@
 # SIREN: publish it on GitHub, from this folder (PUBLISH-SIREN-GITHUB.bat).
 #   1. the source: siren-fm1.bundle (its branch siren) -> the repository OWNER/REPO (created, public, if it does not
 #      exist yet), branch main, the tag
-#   2. the release (a pre-release: SIREN is experimental): docs/release-siren-0.9.1.md, the firmware package (if
+#   2. the release (a pre-release: SIREN is experimental): docs/release-siren-<version>.md, the firmware package (if
 #      INSTALL-SIREN.bat built it), the launch video (SIREN-launch.mp4, if it is in this folder or in
-#      SLOOP\siren\fm1-0.9.1\video)
+#      SLOOP\siren\fm1-<version>\video)
 #   3. the installer on GitHub Pages (branch gh-pages, from build\siren-site)
 # Uses your own Git and GitHub CLI (gh) and your own GitHub login (the browser): this script never sees a password or a
 # token. Nothing is ever forced on main: a repository that already has another history stops the script. gh-pages is
 # generated: it is replaced each time.
-param([string]$Owner = "", [string]$Repo = "siren-fm1", [string]$Tag = "v0.9.1", [switch]$Stable)
+param([string]$Owner = "", [string]$Repo = "siren-fm1", [string]$Tag = "v0.9.2", [switch]$Stable)
 $ErrorActionPreference = 'Continue'
 Set-Location (Split-Path $PSScriptRoot)
-$Version = "0.9.1"
+$Version = "0.9.2"
 function Fail([string]$m) { Write-Host ""; Write-Host "ERROR: $m" -ForegroundColor Red; exit 1 }
 function Step([string]$m) { Write-Host "== $m" -ForegroundColor Cyan }
 

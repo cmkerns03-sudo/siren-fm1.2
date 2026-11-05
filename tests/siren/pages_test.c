@@ -34,6 +34,17 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
     for (j = 0; j < h; j++) for (i = 0; i < w; i++) if (x + i < 240 && y + j < 240) { uint16_t c = p[j * w + i]; fb[(y + j) * 240 + x + i] = (uint16_t)((c >> 8) | (c << 8)); }
 }
 #include "../../firmware/src/gfx.c"
+/* (0.9.2) the flash: settings_save counted, the voices as project.c's audio_quiet sees them */
+static uint32_t t_saves; static int t_unsaved;
+static void settings_save(void) { t_saves++; t_unsaved = 0; }
+static int siren_side_unsaved(void) { return t_unsaved; }
+static int audio_quiet(void)
+{
+    uint32_t p, i;
+    for (p = 0; p < NPART; p++) for (i = 0; i < NVOICE; i++) if (trk[p].v[i].active) return 0;
+    for (i = 0; i < NDRUM; i++) if (drums.v[i].active) return 0;
+    return 1;
+}
 #include "../../firmware/src/siren_ui.c"
 
 static int fails;
@@ -173,6 +184,8 @@ int main(int argc, char **argv)
       CHECK(sb.seed == s0, "SAVE 1 tapped: not played (%08x, kept %08x)", sb.seed, s0);
       key_on(W(2)); frames(60); key_off(W(2)); frames(2);
       CHECK(su.fav[1] == s0 && sb.seed == s0, "SAVE 2 held: not replaced, or played");
+      CHECK(su.fav_dirty && t_saves == 0, "0.9.2: the kept seeds written while playing (%u), or not marked", t_saves);
+      t_unsaved = 1;
       button(B_SAVE); }
 
     /* GLO: the settings' knobs */
@@ -270,6 +283,11 @@ int main(int argc, char **argv)
     CHECK(sr.playing, "still playing");
     button(B_PLAY);
     CHECK(!sr.playing, "PLAY: not stopped");
+    /* (0.9.2) stopped: the kept seeds written once it is quiet, once */
+    CHECK(t_saves == 0, "0.9.2: written at once at the stop, before the tails (%u)", t_saves);
+    frames(400);
+    CHECK(t_saves == 1 && !su.fav_dirty, "0.9.2: the kept seeds not written at the stop (%u writes)", t_saves);
+    { const char *m = su.msg; CHECK(!strcmp(m, "SEEDS SAVED") || su.msg_t == 0, "0.9.2: no SEEDS SAVED (%s)", m); }
     printf(fails ? "pages: %d FAILED\n" : "pages: ok\n", fails);
     return fails != 0;
 }

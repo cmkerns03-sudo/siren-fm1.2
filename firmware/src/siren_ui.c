@@ -20,7 +20,7 @@
  *   LFO              the layers' mix: white keys 1-7 the layer, 9-15 its on / off, 16 the strips back to flat; the
  *                    knobs its VOLUME, FILTER, SPACE, VARIATION
  *   SAVE             16 seeds: an empty key keeps the one playing; a kept one, tapped, plays it again; held, the one
- *                    playing takes its place
+ *                    playing takes its place (0.9.2: kept over a restart, written once the music is stopped)
  *   GLO              the settings: K1 TENSION, K2 MUTATION, K3 INTENSITY, K4 MELODY; keys 1 keep the style, 2 the
  *                    strips back to flat, 3 every layer given back to SIREN; the buttons, what they do
  *   everywhere       PLAY start / stop; REC a new rave (a new seed); the knobs a DJ's (K1 FILTER, K2 INTENSITY,
@@ -42,6 +42,29 @@ static void siren_load_sound(track_t *t, uint32_t e, uint32_t p)
     fm1_irq_on();
 }
 static void su_message(const char *m) { uint32_t i; for (i = 0; i < 19u && m[i]; i++) su.msg[i] = m[i]; su.msg[i] = 0; su.msg_t = 80; }
+/* (0.9.2) the kept seeds survive a restart: in the settings' side record (project.c siren_side_t), written when the
+ * music is stopped and quiet (a flash erase stops the sound for a moment) */
+static int siren_side_unsaved(void);                /* project.c */
+static int audio_quiet(void);                       /* project.c */
+static void settings_save(void);                    /* project.c */
+static void su_fav_kept(void)
+{
+    su.fav_dirty = 1;
+    su_message(sr.playing ? "KEPT: SAVED AT STOP" : "SEED KEPT");
+}
+static void su_fav_flush(void)
+{
+    if (!su.fav_dirty || sr.playing || transport_req || !audio_quiet() || fm1_ms - su.fav_t < 1500u)
+        return;
+    su.fav_t = fm1_ms;                                  /* (a failed write: again in 1.5 s) */
+    settings_save();
+    {
+        int u = siren_side_unsaved();                   /* (-1: no flash on this FM-1: RAM only, as before) */
+        su.fav_dirty = (uint8_t)(u == 1);
+        if (u == 0)
+            su_message("SEEDS SAVED");
+    }
+}
 static uint32_t su_seed_new(void)
 {
     static uint32_t n;
@@ -204,7 +227,7 @@ static void siren_input(void)
     if (su.slot_k >= 0) {
         uint32_t s = (uint32_t)su.slot_k, down = (held >> SU_WHITE[s]) & 1u;
         if (down && !su.slot_done && fm1_ms - su.slot_t0 >= 700u) {          /* held: the seed playing takes its place */
-            su.fav[s] = sb.seed; su.fav_set[s] = 1; su.slot_done = 1; su_message("SEED KEPT");
+            su.fav[s] = sb.seed; su.fav_set[s] = 1; su.slot_done = 1; su_fav_kept();
         } else if (!down) {                                                  /* tapped: it plays */
             if (!su.slot_done) { siren_cmd(SC_SEED, -1, 0, su.fav[s]); su_message("SEED PLAYS"); }
             su.slot_k = -1;
@@ -289,7 +312,7 @@ static void siren_input(void)
             } else if (k == 15u) su_flat();
             break;
         case SP_SAVE:
-            if (!su.fav_set[k]) { su.fav[k] = sb.seed; su.fav_set[k] = 1; su_message("SEED KEPT"); }
+            if (!su.fav_set[k]) { su.fav[k] = sb.seed; su.fav_set[k] = 1; su_fav_kept(); }
             else { su.slot_k = (int8_t)k; su.slot_t0 = fm1_ms; su.slot_done = 0; }
             break;
         default:   /* SP_GLO */
@@ -362,6 +385,7 @@ static void siren_frame(void)
     siren_input();
     if (su.px_key >= 0 && su.msg_t < 2u) su.msg_t = 2;            /* (0.2) the effect's name while it is held */
     siren_service();
+    su_fav_flush();
     siren_leds();
     siren_draw();
 }

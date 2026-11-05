@@ -1012,9 +1012,23 @@ typedef struct {
     uint32_t crc;
 } tune_side_t;
 #endif
+/* (SIREN 0.9.2) SIREN in the TUNING's place (it has no tuning: equal temperament; both do not fit the side record): the
+ * 16 seeds kept on the SAVE page, its own magic and CRC (Clipper reads its tuning's magic there, finds SIREN's, keeps
+ * its own tuning in RAM) */
+#if SIREN && !ABYSS
+#define SIREN_SIDE_MAGIC 0x314E5253u                 /* "SRN1" */
+typedef struct {
+    uint32_t magic;
+    uint16_t set, rsv;                               /* set: bit k, seed k kept */
+    uint32_t seed[16];
+    uint32_t crc;
+} siren_side_t;
+#endif
 typedef struct {
     clip_side_t a;
-#if CLIPPER_SYNTH
+#if SIREN && !ABYSS
+    siren_side_t sr;
+#elif CLIPPER_SYNTH
     tune_side_t tu;
 #endif
 } side2_t;
@@ -1033,7 +1047,15 @@ UI_SMALL static void side_fill(side2_t *s)                    /* what the side r
     r->mch = (uint8_t)(midi_in_ch % 17u);
     memcpy(r->fav, fav, sizeof fav);
     r->crc = st_crc32(r, sizeof *r - 4u);
-#if CLIPPER_SYNTH
+#if SIREN && !ABYSS
+    {
+        uint32_t k;
+        s->sr.magic = SIREN_SIDE_MAGIC;
+        for (k = 0; k < 16u; k++)
+            if (su.fav_set[k]) { s->sr.set |= (uint16_t)(1u << k); s->sr.seed[k] = su.fav[k]; }
+        s->sr.crc = st_crc32(&s->sr, sizeof s->sr - 4u);
+    }
+#elif CLIPPER_SYNTH
     s->tu.magic = TUNE_SIDE_MAGIC;
     s->tu.t = tune_cfg;
     s->tu.crc = st_crc32(&s->tu, sizeof s->tu - 4u);
@@ -1055,7 +1077,15 @@ UI_SMALL static void side_take(const side2_t *s)              /* a side record r
         midi_in_ch = (uint8_t)(r->mch <= 16u ? r->mch : 0u);
         memcpy(fav, r->fav, sizeof fav);
     }
-#if CLIPPER_SYNTH
+#if SIREN && !ABYSS
+    if (s->sr.magic == SIREN_SIDE_MAGIC && s->sr.crc == st_crc32(&s->sr, sizeof s->sr - 4u)) {
+        uint32_t k;
+        for (k = 0; k < 16u; k++) {
+            su.fav_set[k] = (uint8_t)((s->sr.set >> k) & 1u);
+            su.fav[k] = su.fav_set[k] ? s->sr.seed[k] : 0u;
+        }
+    }
+#elif CLIPPER_SYNTH
     if (s->tu.magic == TUNE_SIDE_MAGIC && s->tu.crc == st_crc32(&s->tu, sizeof s->tu - 4u)) {
         tune_cfg = s->tu.t;
         tune_build();
@@ -1185,6 +1215,11 @@ UI_SMALL static int project_used(uint32_t slot) { return proj_ok(&proj_slot[slot
 static uint8_t set_tail[SET_TAIL_MAX];
 static uint32_t set_tail_n;
 _Static_assert(sizeof(persist_t) + sizeof(dsu_bank_t) + SET_TAIL_MAX <= ST_PAYLOAD_MAX, "the settings object");
+#if SIREN && !ABYSS
+/* (0.9.2) SIREN plays its kits in SYN 1 (siren.c siren_kit): SYN 1 as the flash had it, for the settings' saves */
+static dsu_kit_t siren_kit_boot __attribute__((section(".pool")));
+static dsu_kit_t siren_kit_live __attribute__((section(".pool")));
+#endif
 UI_SMALL static int settings_write(const persist_t *p)
 {
     int rc;
@@ -1193,7 +1228,14 @@ UI_SMALL static int settings_write(const persist_t *p)
     side_fill(&side_out);
     st_side = &side_out;
     st_side_len = sizeof side_out;
+#if SIREN && !ABYSS
+    siren_kit_live = dsu.k[0];                     /* (0.9.2) SIREN plays its kits in SYN 1: the user's SYN 1 goes to */
+    dsu.k[0] = siren_kit_boot;                     /* flash as it came (written stopped and quiet: no drum reads it) */
+#endif
     rc = st_save3(OBJ_SETTINGS, p, sizeof *p, &dsu, sizeof dsu, set_tail, set_tail_n);
+#if SIREN && !ABYSS
+    dsu.k[0] = siren_kit_live;
+#endif
     st_side = 0;
     if (rc)
         return -1;
@@ -1217,6 +1259,9 @@ UI_SMALL static void dsu_boot(void)                          /* the SYN kits fro
         memcpy(set_tail, st_buf + sizeof(persist_t) + sizeof(dsu_bank_t), set_tail_n);
     }
     dsu_dirty = 0;
+#if SIREN && !ABYSS
+    siren_kit_boot = dsu.k[0];
+#endif
 }
 #endif
 
@@ -1248,6 +1293,20 @@ UI_SMALL static void settings_save(void)
         persist_saved = p;
 #endif
 }
+#if SIREN && !ABYSS
+static int siren_side_unsaved(void)                 /* (0.9.2) the kept seeds not yet as the flash has them: 1; -1 no flash */
+{
+#if FELUCCA_FLASH
+    side2_t now;
+    if (!flash_ok)
+        return -1;
+    side_fill(&now);
+    return memcmp(&now.sr, &side_saved.sr, sizeof now.sr) != 0;
+#else
+    return -1;
+#endif
+}
+#endif
 
 #if FELUCCA_FLASH
 _Static_assert(sizeof(project_t) <= ST_PAYLOAD_MAX, "project does not fit one flash sector");
