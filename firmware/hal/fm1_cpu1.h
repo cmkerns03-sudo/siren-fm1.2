@@ -175,6 +175,14 @@ static inline int fm1_cpu1_run(void (*fn)(uint32_t), uint32_t arg)
     return 1;
 }
 
+/* (SIREN 0.9) 1 = the job handed over is done (or core 1 refused it: fm1_cpu1_wait then says so at once), without
+ * waiting */
+static inline int fm1_cpu1_done(void)
+{
+    FM1_C1_SYNC();
+    return fm1_c1_mb.done == fm1_c1_mb.job || fm1_c1_mb.bad;
+}
+
 /* 0 = done; -1 = it read a wrong job or did not finish in time: core 1 is held from now on (the
  * caller does the work) */
 static inline int fm1_cpu1_wait(void)
