@@ -1,4 +1,4 @@
-# ABYSS 0.1.2 (experimental): build the firmware (SIREN's sister: SIREN=1 ABYSS=1, 12 voices), then open the browser installer.
+# ABYSS 0.1.3 (experimental): build the firmware (SIREN's sister: SIREN=1 ABYSS=1, 12 voices), then open the browser installer.
 # The same tools as Clipper and SLOOP (WSL MinUI-Build, the JieLi toolchain) and the three AC79 SDK files in
 # build\deps\ac79 (copied from the SLOOP or CLIPPER folder the first time if they are not here yet).
 # Port 8769 (SLOOP 8766, Clipper 8767, SIREN 8768): a window of theirs left open does not get mixed up with this one.
@@ -6,7 +6,7 @@ param([string]$Voices = "12")
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 Write-Host ""
-Write-Host "  A B Y S S   0.1.2   EXPERIMENTAL   ($Voices voices)" -ForegroundColor White
+Write-Host "  A B Y S S   0.1.3   EXPERIMENTAL   ($Voices voices)" -ForegroundColor White
 Write-Host "  ---- ---- ---- ----" -ForegroundColor DarkGray
 if ($Voices -notin @("8", "12", "16")) { throw "Voices: 8, 12 or 16" }
 $sdk = "build\deps\ac79"
@@ -29,7 +29,7 @@ $env:SIREN = "1"; $env:ABYSS = "1"
 python tools/build_windows.py --distro MinUI-Build --toolchain /root/fm1-codex-deps/jieli/toolchain --sdk $sdk --slice 0 --nvoice $Voices --siren 1 --abyss 1
 if ($LASTEXITCODE -ne 0) { throw "The build failed: send the messages above to Claude" }
 Write-Host "== Making the installer site" -ForegroundColor Cyan
-python web/make_site.py build/felucca.fwsc abyss-0.1.2 build/abyss-site
+python web/make_site.py build/felucca.fwsc abyss-0.1.3 build/abyss-site
 if ($LASTEXITCODE -ne 0) { throw "make_site failed" }
 Write-Host ""
 Write-Host "Installer: http://localhost:8769/webapp/installer/  (Chrome or Edge, FM-1 on USB)" -ForegroundColor Green

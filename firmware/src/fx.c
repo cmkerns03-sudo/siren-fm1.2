@@ -271,9 +271,21 @@ static uint32_t delay_samples(void)
  * 33 KB of lines (the punch-in ring's memory, gone in the synth); two input samples averaged into one tank step, the
  * output between the last two steps. */
 enum { PL_AP1, PL_AP2, PL_AP3, PL_AP4, PL_MA, PL_DA1, PL_AA, PL_DA2, PL_MB, PL_DB1, PL_AB, PL_DB2, PL_PRE, PL_N };
+#if ABYSS
+/* (ABYSS 0.1.3) its HALL (and SHIMMER) at a quarter of the rate (11.025 kHz): every line and tap half as long in
+ * samples (the same times), four input samples a step, the output gliding between the steps. HALL's input is darkened
+ * to ~2.8 kHz first (bw), well under the 5.5 kHz the quarter rate keeps: its tail sounds the same, for half the work */
+#define PL_DIV 4u
+#define PLQ(x) (((x) + 1u) / 2u)          /* a length or a tap at 22.05 kHz -> at 11.025 kHz */
+#define PL_EXC 6
+#else
+#define PL_DIV 2u
+#define PLQ(x) (x)
 #define PL_EXC 12                 /* the modulated diffusers' excursion (+- samples) */
-static const uint16_t PL_LEN[PL_N] = {105, 79, 281, 205, 498 + PL_EXC + 2, 3299, 1334, 2756, 673 + PL_EXC + 2, 3124,
-                                      1968, 2343, 2206};
+#endif
+static const uint16_t PL_LEN[PL_N] = {PLQ(105u), PLQ(79u), PLQ(281u), PLQ(205u), PLQ(498u) + PL_EXC + 2, PLQ(3299u),
+                                      PLQ(1334u), PLQ(2756u), PLQ(673u) + PL_EXC + 2, PLQ(3124u), PLQ(1968u),
+                                      PLQ(2343u), PLQ(2206u)};
 #define PL_TOTAL (105 + 79 + 281 + 205 + 512 + 3299 + 1334 + 2756 + 687 + 3124 + 1968 + 2343 + 2206)
 static int16_t pl_buf[PL_TOTAL] __attribute__((section(".pool")));
 static struct {
@@ -359,9 +371,9 @@ static void plate_step(int32_t x, int32_t decay, int32_t damp, uint32_t pre, int
     x = pl_ap(PL_AP2, x, 24576);
     x = pl_ap(PL_AP3, x, 20480);                                /* 0.625 */
     x = pl_ap(PL_AP4, x, 20480);
-    pl.lph += 194783u;                                          /* ~1 Hz at 22.05 kHz */
-    ma = ((498 << 8) + ((osc_sine(pl.lph) * PL_EXC) >> 7));
-    mb = ((673 << 8) + ((osc_sine(pl.lph + 0x40000000u) * PL_EXC) >> 7));
+    pl.lph += 194783u * (PL_DIV / 2u);                          /* ~1 Hz at 22.05 kHz (ABYSS: at 11.025) */
+    ma = (((int32_t)PLQ(498u) << 8) + ((osc_sine(pl.lph) * PL_EXC) >> 7));
+    mb = (((int32_t)PLQ(673u) << 8) + ((osc_sine(pl.lph + 0x40000000u) * PL_EXC) >> 7));
     a = pl_mod_ap(PL_MA, x + mulq15(pl.end[1], decay), -22938, ma);   /* -0.7: the decay diffusion */
     b = pl_mod_ap(PL_MB, x + mulq15(pl.end[0], decay), -22938, mb);
     pl_put(PL_DA1, a);
@@ -380,10 +392,10 @@ static void plate_step(int32_t x, int32_t decay, int32_t damp, uint32_t pre, int
      * line's end: x 0.741 it read 1417 back on a 1334-sample line, 83 samples old or (the index wrapping) the line
      * before's: a click a turn of the line, on the left only. Read inside it, the same share of the line as the
      * right's AB 910 / 1968 tap: 1250 */
-    *yl = pl_tap(PL_DA1, 197) + pl_tap(PL_DA1, 2203) - pl_tap(PL_AA, 1250) + pl_tap(PL_DA2, 1479) -
-          pl_tap(PL_DB1, 1474) - pl_tap(PL_AB, 139) - pl_tap(PL_DB2, 790);
-    *yr = pl_tap(PL_DB1, 262) + pl_tap(PL_DB1, 2687) - pl_tap(PL_AB, 910) + pl_tap(PL_DB2, 1980) -
-          pl_tap(PL_DA1, 1564) - pl_tap(PL_AA, 248) - pl_tap(PL_DA2, 90);
+    *yl = pl_tap(PL_DA1, PLQ(197u)) + pl_tap(PL_DA1, PLQ(2203u)) - pl_tap(PL_AA, PLQ(1250u)) + pl_tap(PL_DA2, PLQ(1479u)) -
+          pl_tap(PL_DB1, PLQ(1474u)) - pl_tap(PL_AB, PLQ(139u)) - pl_tap(PL_DB2, PLQ(790u));
+    *yr = pl_tap(PL_DB1, PLQ(262u)) + pl_tap(PL_DB1, PLQ(2687u)) - pl_tap(PL_AB, PLQ(910u)) + pl_tap(PL_DB2, PLQ(1980u)) -
+          pl_tap(PL_DA1, PLQ(1564u)) - pl_tap(PL_AA, PLQ(248u)) - pl_tap(PL_DA2, PLQ(90u));
 }
 #ifndef SH_DECAY
 #define SH_DECAY 27000
@@ -406,12 +418,33 @@ static void plate_run(const int32_t *rev_in, int32_t *wet_l, int32_t *wet_r, uin
                                                                  * samples (HALL: 18 ms more, a big room's) */
     int32_t bw = hall ? 18000 : 26000, shim = rt == RT_SHIMMER ? SH_GAIN : 0;   /* (SHIMMER: some of the tail an octave up) */
     uint32_t i;
+#if ABYSS
+    pre = PLQ(pre);                                             /* (a quarter rate: the same cutoffs: k' = 1 - (1 - k)^2) */
+    bw = 32767 - (((32767 - bw) * (32767 - bw)) >> 15);
+    damp = 32767 - (((32767 - damp) * (32767 - damp)) >> 15);
+#endif
     static uint32_t pre_cur;                                    /* (1.0) the pre-delay glides (a jump: a step in) */
     if (!pl.ready)
         plate_clear(), pre_cur = pre;
     for (i = 0; i < n; i++) {
         int32_t x = mulq15(rev_in[i], 13000), wl, wr;           /* (as the room's input) */
         int32_t g = rg0 + (((rg1 - rg0) * (int32_t)i) >> CTL_LOG2);
+#if ABYSS
+        {   /* a quarter rate: the output glides from the step before to the last over the four samples */
+            uint32_t ph = pl.half & 3u;
+            wl = pl.y0l + (((pl.y1l - pl.y0l) * (int32_t)ph) >> 2);
+            wr = pl.y0r + (((pl.y1r - pl.y0r) * (int32_t)ph) >> 2);
+            pl.acc = ph ? pl.acc + x : x;
+            if (ph == 3u) {
+                int32_t yl, yr;
+                pre_cur += pre_cur < pre ? 1u : pre_cur > pre ? (uint32_t)-1 : 0u;
+                plate_step(pl.acc >> 2, decay, damp, pre_cur, bw, shim, &yl, &yr);
+                pl.y0l = pl.y1l, pl.y0r = pl.y1r;
+                pl.y1l = (yl * 19661) >> 14, pl.y1r = (yr * 19661) >> 14;
+            }
+            pl.half = (uint8_t)((ph + 1u) & 3u);
+        }
+#else
         if (!pl.half) {
             pl.acc = x;
             wl = (pl.y0l + pl.y1l) >> 1;                        /* between the last two steps */
@@ -424,11 +457,12 @@ static void plate_run(const int32_t *rev_in, int32_t *wet_l, int32_t *wet_r, uin
             pl.y1l = (yl * 19661) >> 14, pl.y1r = (yr * 19661) >> 14;   /* x 1.2: the paper's 0.6, as loud as ROOM */
             wl = pl.y0l, wr = pl.y0r;
         }
+        pl.half ^= 1u;
+#endif
         if (g != 32767)
             wl = mulq15(wl, g), wr = mulq15(wr, g);
         wet_l[i] += wl;
         wet_r[i] += wr;
-        pl.half ^= 1u;
     }
 }
 #endif
@@ -789,6 +823,33 @@ static void tflt_run(djf_t *f, const tsvf_t *c, int32_t *b, uint32_t n, uint32_t
     for (i = 0; i < n; i++)
         b[i] <<= 2;
 }
+
+#if ABYSS
+/* (ABYSS 0.1.3) a layer's FILTER on the low-pass side, lighter: one pole (6 dB an octave, the SVF's 12), at the same
+ * cutoff (its g, the SVF's table, a trapezoidal one-pole: G = g / (1 + g)), a third of the work. ABYSS's layers sit
+ * under it most of the time (the brain closes them when quiet, the sounds' tone ceilings); the high-pass side, rare
+ * (a layer's FILTER turned right), stays the SVF. State: z[ch][1], seeded as djf_run's */
+static void tflt_lp1(djf_t *f, int32_t *b, uint32_t n, uint32_t ch)
+{
+    int32_t cut = clamp(f->cut, 0, 127 << 8), i = cut >> 8, g = SVF_G[i], G, s;
+    uint32_t k;
+    if (i < 127)
+        g += ((SVF_G[i + 1] - g) * (cut & 255)) >> 8;
+    G = (int32_t)(((uint32_t)g << 12) / (uint32_t)(4096 + g));     /* Q12 */
+    if ((f->seed >> ch) & 1u) {
+        f->seed &= (uint8_t)~(1u << ch);
+        if (n)
+            f->z[ch][1] = clamp(b[0] >> 2, -140000, 140000);       /* (at rest on this input: the output is it) */
+    }
+    s = f->z[ch][1];
+    for (k = 0; k < n; k++) {
+        int32_t x = clamp(b[k] >> 2, -140000, 140000), v = ((x - s) * G) >> 12, y = s + v;   /* (|x - s| x 4096 < 2^31) */
+        s = y + v;
+        b[k] = y << 2;
+    }
+    f->z[ch][1] = s;
+}
+#endif
 
 #if CLIPPER_SYNTH
 /* INSERT (Clipper 0.6: SLOOP 2.6's, after Felucca 1.5 by Leo Kuroshita, Discussions #78 and #177): one effect per
@@ -1320,11 +1381,20 @@ static void mix_part1(track_t *t, uint32_t n)
             tsvf_t fc;                                  /* the track's FILTER (P_TFLT), after the SLICER */
             djf_t *f = &tflt[(uint32_t)(t - trk) % NTRK];
             if (djf_block(f, t->p[P_TFLT], &fc)) {
+#if ABYSS
+                if (f->mode < 0) {                      /* (ABYSS 0.1.3: the low-pass side, one pole) */
+                    tflt_lp1(f, b, n, 0);
+                    if (part_side_on)
+                        tflt_lp1(f, part_side, n, 1);
+                } else
+#endif
+                {
                 tflt_run(f, &fc, b, n, 0);
 #if CLIPPER_SYNTH
                 if (part_side_on)                       /* (1.0) SPREAD's side through the same filter (its own state) */
                     tflt_run(f, &fc, part_side, n, 1);
 #endif
+                }
             }
         }
 #if CLIPPER_SYNTH

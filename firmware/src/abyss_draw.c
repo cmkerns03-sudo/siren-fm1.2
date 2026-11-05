@@ -402,7 +402,7 @@ static void su_page_glo(void)                    /* GLO: the settings, and what 
     static const char *const R[] = {"PAGES  FX TEXTURES  SEL WORLD", "ENV GESTURES  LFO LAYERS  SAVE SEEDS",
                                     "THE SAME BUTTON OR HOME: THE DECK", "BLACK KEYS: RISE PEAK CALM BREATH",
                                     "LIFT THEME HARMONY HOLD NEXT VOID FADE", "DECK: THE KEYS PLAY THE LAYER",
-                                    "HOME ON THE DECK: ABYSS TAKES IT BACK", "REC A NEW SET         ABYSS 0.1.2"};
+                                    "HOME ON THE DECK: ABYSS TAKES IT BACK", "REC A NEW SET         ABYSS 0.1.3"};
     static const char *const TP[4] = {"1 GIVE", "2 MIX", "", ""};
     const char *nm[4]; uint8_t st[4]; uint32_t k;
     nm[0] = "ALL BACK"; nm[1] = "FLAT"; nm[2] = ""; nm[3] = "";
@@ -421,7 +421,7 @@ static void su_foot(void)
     uint32_t q = (uint32_t)song.cpu_q8 * 100u >> 8;
     su_s_t nx = {{0}, 0}, hm = {{0}, 0};
     static const char *const HM[SP_N] = {"", "SHIMMER  TAPE", "1-3 THE WORLD", "THE PIECE IN YOUR HANDS", "KNOBS: THE LAYER'S STRIP",
-                                         "16 SEEDS", "ABYSS 0.1.2"};
+                                         "16 SEEDS", "ABYSS 0.1.3"};
     const char *m;
     char kb[9];
     if (su.info == SP_HOME) {
