@@ -77,6 +77,7 @@ static void siren_ui_init(void)
     uint32_t L;
     su.knob[0] = 500; su.knob[1] = 500; su.knob[2] = 500; su.knob[3] = 350;
     su.style = SB_TRANCE;
+    su.batt = -1;                                       /* (0.9.2) not read yet */
     su.px_key = -1; su.focus = L_HOOK; su.slot_k = -1;
     su.space = 100;
     for (L = 0; L < 7u; L++) su.lspace[L] = 100;

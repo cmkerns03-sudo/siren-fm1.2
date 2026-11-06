@@ -20,11 +20,13 @@ USB). The installer page also takes you back to the official firmware (V16 or V1
 - **You play it**: the black keys shape the track (BREAK, BUILD, DROP, FILL, NEW MELODY, NEXT TRACK...), the white
   keys take any layer, 16 DJ effects, a mixer, four DJ knobs, 16 seeds to keep the tracks you love.
 
-## New in 0.9.2: your seeds stay
+## New in 0.9.2: your seeds stay, the battery in %
 
 - **The 16 seeds of the SAVE page are kept over a restart.** Writing the FM-1's memory stops the sound for a moment,
   so SIREN writes them when the music is stopped: a seed kept while it plays shows KEPT: SAVED AT STOP, and SEEDS
   SAVED once it is written. Turn the FM-1 off only after a stop if you kept seeds while playing.
+- **The battery in %** at the bottom of the deck, in the middle (USB when a computer powers the FM-1; orange under
+  15 %). It is worked out from the battery's voltage, so it reads a few % lower while the music plays.
 - SIREN no longer loads a tuning saved by Clipper (it has no tuning page: equal temperament). Its seeds sit where
   Clipper keeps its tuning: after SIREN saves its seeds, Clipper starts in equal temperament until you set the tuning
   again.

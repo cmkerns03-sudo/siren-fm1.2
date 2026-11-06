@@ -51,6 +51,7 @@ static struct {
     int16_t knob[4];
     uint32_t fav[16]; uint8_t fav_set[16];
     uint8_t fav_dirty; uint32_t fav_t;           /* (0.9.2) kept seeds not in flash yet; the last try (project.c) */
+    int8_t batt;                                 /* (0.9.2) the battery shown on the deck, %, -1 not read yet */
     uint8_t locks[7];
     uint8_t fx_was; int8_t px_key;               /* (0.2) FX held, the effect's key (-1) */
     /* (0.5) the hands on the mix: the layer chosen (SELECT), the variation's clicks; the master's filter and space; each
@@ -457,6 +458,39 @@ static void su_page_glo(void)                    /* GLO: the settings, and what 
     cv_blit(0, 119);
 }
 
+/* ---- (0.9.2) the battery, in %, at the bottom of the deck. The stock firmware's three bars (ui_draw.c batt_level)
+ * sit at ADC 531 / 561 / 591: 3.6 / 3.8 / 4.0 V of the Li-ion cell, 147.7 a volt through the divider. The voltage,
+ * then the charge a Li-ion cell holds at it, interpolated (at rest: playing, it reads a few % low) */
+static const uint16_t SU_BMV[12] = {3300, 3400, 3500, 3600, 3650, 3700, 3750, 3800, 3900, 4000, 4100, 4200};
+static const uint8_t SU_BPC[12] = {0, 2, 5, 12, 20, 30, 40, 50, 65, 80, 90, 100};
+static int32_t su_batt_pct(void)
+{
+    int32_t mv = song.batt_raw * 677 / 100, i;          /* (1 / 147.7 V = 6.77 mV) */
+    if (song.batt_raw <= 0)
+        return -1;
+    if (mv <= SU_BMV[0])
+        return 0;
+    for (i = 1; i < 12; i++)
+        if (mv < SU_BMV[i])
+            return SU_BPC[i - 1] + (SU_BPC[i] - SU_BPC[i - 1]) * (mv - SU_BMV[i - 1]) / (SU_BMV[i] - SU_BMV[i - 1]);
+    return 100;
+}
+static int su_on_usb(void) { return usb.config && !usb.suspended; }   /* (a computer powers it: it charges, no %) */
+/* the icon and the % (or USB, charging: the bars filling as the stock's do), centred at x */
+static void su_batt_draw(int32_t xc, uint16_t c)
+{
+    su_s_t t = {{0}, 0};
+    int32_t w, x, fill, chg = su_on_usb();
+    if (chg) { su_c(&t, "USB"); fill = 1 + (int32_t)((fm1_ms / 600u) % 3u) * 4; }
+    else { su_u(&t, (uint32_t)su.batt, 1); su_c(&t, "%"); fill = (su.batt * 11 + 50) / 100; }
+    w = 16 + 3 + su_tw(t.b, 1);
+    x = xc - w / 2;
+    cv_rect(x, 4, 14, 1, c); cv_rect(x, 11, 14, 1, c); cv_rect(x, 4, 1, 8, c); cv_rect(x + 13, 4, 1, 8, c);
+    cv_rect(x + 14, 6, 2, 4, c);                            /* (the nub) */
+    if (fill > 0) cv_rect(x + 2, 6, fill > 10 ? 10 : fill, 4, c);
+    su_t(x + 19, 5, t.b, c, 1);
+}
+
 /* ---- the footer: the effect held, or what was just done; the load */
 static void su_foot(void)
 {
@@ -466,15 +500,18 @@ static void su_foot(void)
                                          "KNOBS: THE LAYER'S STRIP", "16 SEEDS", "SIREN 0.9.2"};
     su_s_t hm = {{0}, 0};
     const char *m;
+    int32_t bp = su_batt_pct();
+    if (bp < 0 || su.batt < 0 || bp > su.batt + 1 || bp < su.batt - 1)   /* (0.9.2: 2 % of hysteresis, no flicker) */
+        su.batt = (int8_t)bp;
     if (su.info == SP_HOME) {                                            /* (0.8) the deck: the keyboard, the layer in the hands */
-        uint32_t L = su.focus % 7u;
-        if (sr.live) { su_c(&hm, "LIVE  HOME: GIVE IT BACK"); }
-        else if (L == L_DRUMS) su_c(&hm, "THE KEYS PLAY THE KIT");
-        else {
-            su_c(&hm, "KEYS PLAY "); su_c(&hm, SU_LAYER[L]);
-            if (su.oct) { su_c(&hm, su.oct < 0 ? " OCT-" : " OCT+"); su_u(&hm, (uint32_t)(su.oct < 0 ? -su.oct : su.oct), 1); }
+        uint32_t L = su.focus % 7u;                                      /* (0.9.2: short, the battery in the middle) */
+        if (sr.live) { su_c(&hm, "LIVE: HOME"); }
+        else if (L == L_DRUMS) su_c(&hm, "KEYS: KIT");
+        else if (su.oct || su.larp) {
+            su_c(&hm, SU_LAYER[L]);
+            if (su.oct) { su_c(&hm, su.oct < 0 ? "-" : "+"); su_u(&hm, (uint32_t)(su.oct < 0 ? -su.oct : su.oct), 1); }
             if (su.larp) su_c(&hm, " ARP");
-        }
+        } else { su_c(&hm, "KEYS: "); su_c(&hm, SU_LAYER[L]); }
     } else su_c(&hm, HM[su.info % SP_N]);
     m = fx ? SIREN_PX[sb.style % SB_NSTYLES][su.px_key % 16].name : su.msg_t ? su.msg : hm.b;
     char kb[9];
@@ -487,13 +524,15 @@ static void su_foot(void)
         m = nx.b;
     } else if (!fx && !su.msg_t && sb.drop_req) m = "DROP AT THE NEXT BAR";
     else if (!fx && !su.msg_t && sb.key_req) m = "KEY UP AT THE DROP";
+    int bat = su.info == SP_HOME && m == hm.b && (su.batt >= 0 || su_on_usb());   /* (0.9.2: the deck as it rests) */
     uint32_t sig = su_mix(su_mix(q / 2u, sr.lean), fx * 2u + (su.msg_t ? 1u : 0u) + (nx.n ? 4u : 0u)), i;
+    if (bat) sig = su_mix(sig, su_on_usb() ? 1000u + (fm1_ms / 600u) % 3u : (uint32_t)su.batt);
     su_s_t s = {{0}, 0};
     for (i = 0; m[i]; i++) sig = su_mix(sig, (uint8_t)m[i]);
     if (!su_need(19, su_mix(sig, su.info))) return;
     cv_begin(240, 16, fx ? SU_ACC : SU_PANEL);                        /* (0.9: the big font; the load small, right) */
     {
-        char cut[24]; uint32_t c = 0, lim = 196u;
+        char cut[24]; uint32_t c = 0, lim = bat ? 100u : 196u;
         const char *src = m;
         if (fx) { cv_text(4, 0, &FONT_S, "FX", SU_BG); }
         while (src[c] && c < 23u) { cut[c] = src[c]; c++; }
@@ -501,6 +540,7 @@ static void su_foot(void)
         while (c && (uint32_t)text_w(&FONT_S, cut) > lim - (fx ? 30u : 4u)) cut[--c] = 0;   /* (what fits before the load) */
         cv_text(fx ? 30 : 4, 0, &FONT_S, cut, fx ? SU_BG : su.msg_t || nx.n ? SU_ACC : SU_DIM);
     }
+    if (bat) su_batt_draw(120, su_on_usb() || su.batt > 15 ? SU_DIM : SU_ACC);
     if (sr.lean) { char e[6] = "ECO 0"; e[4] = (char)('0' + sr.lean); su_tr(236, 1, e, fx ? SU_BG : SU_ACC, 1); }
     su_c(&s, "CPU "); su_u(&s, q, 1); su_c(&s, "%");
     su_tr(236, sr.lean ? 9 : 5, s.b, fx ? SU_BG : (q > 80u ? SU_ACC : SU_DIM), 1);

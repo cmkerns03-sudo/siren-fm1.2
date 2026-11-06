@@ -54,6 +54,8 @@ to the deck.
 | HOME | back to the deck; on the deck, give your layer back to SIREN |
 | K1 K2 K3 K4 | FILTER (low pass, open, high pass), INTENSITY, SPACE, MELODY |
 
+**The deck's footer** shows what the keys play on the left, the battery in % in the middle (USB when a computer powers the FM-1) and the CPU on the right.
+
 **The keyboard** (on the deck). The white keys play the layer you chose, in the track's key and scale; the first note
 takes it (LIVE): SIREN stops writing it until HOME gives it back. The black keys shape the track, on the beat (lit
 while they wait): BREAK, BUILD 4, BUILD 16, DROP, FILL, NEW MELODY, NEW BASS, NEW GROOVE, KEY UP, NEXT TRACK, STAY.
