@@ -4,7 +4,7 @@
 #   2. the release (a pre-release: SIREN is experimental): docs/release-siren-<version>.md, the firmware package (if
 #      INSTALL-SIREN.bat built it), the launch video (SIREN-launch.mp4, if it is in this folder or in
 #      SLOOP\siren\fm1-<version>\video)
-#   3. the installer on GitHub Pages (branch gh-pages, from build\siren-site)
+#   3. the installer and SIREN STUDIO on GitHub Pages (branch gh-pages, from build\siren-site; the studio from the source)
 # Uses your own Git and GitHub CLI (gh) and your own GitHub login (the browser): this script never sees a password or a
 # token. Nothing is ever forced on main: a repository that already has another history stops the script. gh-pages is
 # generated: it is replaced each time.
@@ -105,7 +105,7 @@ $assets = @()
 $fw = Get-ChildItem (Join-Path (Join-Path $site "firmware") "siren-$Version.fwsc") -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($fw) { $assets += $fw.FullName }
 else { Write-Host "(No firmware built for ${Version}: run INSTALL-SIREN.bat first. The release is published without the .fwsc; run this script again afterwards to add it.)" -ForegroundColor Yellow }
-$video = @("SIREN-launch.mp4", "..\SLOOP\siren\fm1-$Version\video\SIREN-launch.mp4") | Where-Object { Test-Path $_ } | Select-Object -First 1
+$video = @("SIREN-launch.mp4", "..\SLOOP\siren\fm1-$Version\video\SIREN-launch.mp4", "..\SLOOP\siren\fm1-0.9.1\video\SIREN-launch.mp4") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($video) { $assets += (Resolve-Path $video).Path }
 gh release view $Tag --repo $full *> $null
 if ($LASTEXITCODE -eq 0) {
@@ -123,16 +123,20 @@ if ($LASTEXITCODE -ne 0) { Fail "the release $Tag" }
 # 3. GitHub Pages: the installer
 if (Test-Path (Join-Path (Join-Path (Join-Path $site "webapp") "installer") "index.html")) {
   if (-not $fw) { Fail "build\siren-site is not SIREN $Version's: run INSTALL-SIREN.bat again, then this script" }
-  Step "The installer on GitHub Pages"
+  Step "The installer and SIREN STUDIO on GitHub Pages"
   $pg = Join-Path $work "pages"
   New-Item -ItemType Directory -Force $pg | Out-Null
   Copy-Item -Recurse (Join-Path $site "*") $pg
+  # SIREN STUDIO: the one in the source just pushed (a site built before its last fix still gets the latest)
+  $st = Join-Path (Join-Path $pg "webapp") "studio"
+  New-Item -ItemType Directory -Force $st | Out-Null
+  Copy-Item -Force (Join-Path (Join-Path $repoDir "web") "siren_studio.html") (Join-Path $st "index.html")
   New-Item -ItemType File (Join-Path $pg ".nojekyll") | Out-Null
   Push-Location $pg
   git init --quiet
   git checkout --quiet -b gh-pages
   git add -A
-  git -c user.name="$Owner" -c user.email="$email" commit --quiet -m "SIREN ${Version}: the installer"
+  git -c user.name="$Owner" -c user.email="$email" commit --quiet -m "SIREN ${Version}: the installer and SIREN STUDIO"
   git push --force "https://github.com/$full.git" gh-pages
   $ok = $LASTEXITCODE -eq 0
   Pop-Location
@@ -147,3 +151,4 @@ Write-Host ""
 Write-Host "Repository:  https://github.com/$full" -ForegroundColor Green
 Write-Host "Release:     https://github.com/$full/releases/tag/$Tag" -ForegroundColor Green
 Write-Host "Installer:   $pages/webapp/installer/" -ForegroundColor Green
+Write-Host "STUDIO:      $pages/webapp/studio/" -ForegroundColor Green

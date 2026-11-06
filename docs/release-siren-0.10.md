@@ -31,6 +31,8 @@ USB). The installer page also takes you back to the official firmware (V16 or V1
 - **Every drum kit everywhere**: PRESET on the drums goes through the 16 kits of every style; ALL SOUNDS picks the
   drums from every style too.
 - **A seed keeps its style**: a seed kept in PSY plays in PSY again (and with ALL SOUNDS if it was on).
+- SIREN STUDIO tells you what it finds when it cannot connect: the firmware the FM-1 runs if it is not SIREN 0.10,
+  or the MIDI ports it sees. Building it yourself, `OPEN-SIREN-STUDIO.bat` opens it on your own computer.
 
 ## New in 0.9.2: your seeds stay, the battery in %
 
