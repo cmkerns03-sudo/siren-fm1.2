@@ -93,12 +93,16 @@ static int act(uint32_t kind, uint32_t a, int32_t v)
 static int bridge(void)
 {
     char line[4096];
+    const int old_fw = getenv("STUDIO_OLD_FW") != 0;
     while (fgets(line, sizeof line, stdin)) {
         uint8_t f[1400]; uint32_t n = 0, i, rn; char *p = line; const uint8_t *r;
         if (line[0] == 't') { frames((uint32_t)atoi(line + 1)); printf("ok\n"); fflush(stdout); continue; }   /* (time) */
         while (*p && n < sizeof f) { unsigned v; int c; if (sscanf(p, "%2x%n", &v, &c) != 1) break; f[n++] = (uint8_t)v; p += c; while (*p == ' ') p++; }
         if (n < 6 || f[0] != 0xF0 || f[n - 1] != 0xF7 || f[1] != 0x7D) { printf("\n"); fflush(stdout); continue; }
-        r = rq(f[4], f + 5, n - 6, &rn);
+        if (f[4] == 1u) {                                   /* the editor's INFO (editor.c ED_INFO): the version */
+            ed_begin(1); ed_str(old_fw ? "FELUCCA SIREN 0.9.2 EXP" : "FELUCCA " FELUCCA_VERSION, 24); ed_out[ed_n++] = 0xF7; rn = 0; r = ed_out;
+        } else if (old_fw) r = 0;                           /* (an older SIREN: no SIREN STUDIO, no answer) */
+        else r = rq(f[4], f + 5, n - 6, &rn);
         if (!r) { printf("\n"); fflush(stdout); continue; }
         for (i = 0; i < ed_n; i++) printf("%02X%s", ed_out[i], i + 1 < ed_n ? " " : "\n");
         fflush(stdout);

@@ -10,18 +10,29 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 exe, out = sys.argv[1], Path(sys.argv[2]); out.mkdir(parents=True, exist_ok=True)
-br = subprocess.Popen([exe, 'bridge'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+def bridge(env=None):
+    return subprocess.Popen([exe, 'bridge'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1,
+                            env=dict(os.environ, **(env or {})))
+br = bridge()
 def wire(hexline):
     br.stdin.write(hexline + '\n'); br.stdin.flush()
     return br.stdout.readline().strip()
+# WebMIDI as Chrome does it: a port is closed until open() resolves (setting onmidimessage opens it too, later), and
+# what comes in while it is closed is lost; a Windows MIDI interface of another make is listed before the FM-1
 SHIM = """
 (() => {
-  const input = {name: 'Clipper', id: 'in', onmidimessage: null};
-  const output = {name: 'Clipper', id: 'out', send(d) {
+  const mk = (name, id) => ({name, id, connection: 'closed', open() { return new Promise(r => setTimeout(() => { this.connection = 'open'; r(this); }, 60)); }});
+  const other = mk('USB-MIDI Interface', 'in0'), otherOut = mk('USB-MIDI Interface', 'out0');
+  otherOut.send = () => {};
+  const input = mk('Clipper', 'in');
+  let handler = null;
+  Object.defineProperty(input, 'onmidimessage', {get: () => handler, set(f) { handler = f; if (input.connection !== 'open') setTimeout(() => input.connection = 'open', 400); }});
+  const output = mk('Clipper', 'out');
+  output.send = (d) => {
     const hex = Array.from(d).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
-    window.__wire(hex).then(r => { if (r && input.onmidimessage) input.onmidimessage({data: Uint8Array.from(r.split(' ').map(x => parseInt(x, 16)))}); });
-  }};
-  navigator.requestMIDIAccess = async () => ({inputs: new Map([['in', input]]), outputs: new Map([['out', output]])});
+    window.__wire(hex).then(r => { if (r && handler && input.connection === 'open') handler({data: Uint8Array.from(r.split(' ').map(x => parseInt(x, 16)))}); });
+  };
+  navigator.requestMIDIAccess = async () => ({inputs: new Map([['in0', other], ['in', input]]), outputs: new Map([['out0', otherOut], ['out', output]])});
 })();
 """
 fails = []
@@ -36,6 +47,14 @@ with sync_playwright() as p:
     pg.expose_function('__wire', wire)
     pg.add_init_script(SHIM)
     pg.add_init_script("try { localStorage.setItem('siren-studio-lang', 'en'); } catch (e) {}")
+    # an older SIREN first: the page says which one the FM-1 runs
+    br0 = br; br = bridge({'STUDIO_OLD_FW': '1'})
+    pg.goto('file://' + os.path.abspath('web/siren_studio.html'))
+    pg.click('#conn')
+    pg.wait_for_function("document.getElementById('status').textContent.includes('runs')", timeout=30000)
+    st = pg.text_content('#status')
+    check('SIREN 0.9.2' in st and '0.10' in st, 'an older SIREN: ' + st)
+    br.stdin.close(); br.wait(); br = br0
     pg.goto('file://' + os.path.abspath('web/siren_studio.html'))
     pg.click('#conn')
     pg.wait_for_function("document.getElementById('status').textContent.startsWith('Connected')", timeout=30000)

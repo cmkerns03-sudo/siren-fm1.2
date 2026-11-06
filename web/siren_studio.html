@@ -175,7 +175,7 @@ const T = {
     tickAll: "TICK ALL", tickFactory: "ONLY THE FACTORY'S", saveBank: "SEND TO THE FM-1", resetBank: "THIS BANK: FACTORY", resetAll: "EVERY BANK: FACTORY",
     mute: "MUTE", lock: "KEEP", reroll: "REROLL", motif: "MOTIF", vol: "VOLUME", flt: "FILTER", space: "SPACE", filter: "FILTER", intensity: "INTENSITY",
     melody: "MELODY", tension: "TENSION", mutation: "MUTATION", playIt: "PLAY", keep: "KEEP", clear: "CLEAR", empty: "empty", listen: "LISTEN", use: "USE",
-    factory: "factory", noFm1: "No FM-1 found: plug it in with a USB data cable, then press Connect.", noMidi: "This browser has no WebMIDI: use Chrome or Edge on a computer or an Android phone.",
+    factory: "factory", noFm1: "No FM-1 found: plug it in with a USB data cable (no hub), then press Connect. MIDI ports seen: {p}.", searching: "Looking for the FM-1...", oldFw: "Your FM-1 runs {v}. SIREN STUDIO needs SIREN 0.10: install it (INSTALL-SIREN.bat, the window's title says S I R E N 0.10), then press Connect.", noAnswer: "The FM-1 does not answer. Check that SIREN 0.10 is installed (bottom of the GLO page: SIREN 0.10), close the other pages and programs that use its MIDI (the installer, the editor, a DAW), unplug it and plug it back, then press Connect. MIDI ports seen: {p}.", inUse: "The FM-1's MIDI is used by another program: close it (a DAW, another editor, the installer in another browser), then press Connect. MIDI ports seen: {p}.", noMidi: "This browser has no WebMIDI: use Chrome or Edge on a computer or an Android phone.",
     denied: "MIDI was not allowed: allow it in the browser, then press Connect.", notSiren: "The FM-1 does not run SIREN 0.10 or newer: install it first.",
     connected: "Connected", lost: "The FM-1 stopped answering", added: "seeds added", replaced: "seeds sent", bad: "not understood", full: "no free slot left",
     sent: "Sent: from the next track (kept in the FM-1 once stopped)", oneAtLeast: "Keep at least one sound", reset: "Back to the factory's", stoppedListen: "Press PLAY to hear it",
@@ -192,7 +192,7 @@ const T = {
     tickAll: "TOUT COCHER", tickFactory: "SEULEMENT CEUX D'USINE", saveBank: "ENVOYER À LA FM-1", resetBank: "CETTE BANK : USINE", resetAll: "TOUTES LES BANKS : USINE",
     mute: "MUET", lock: "GARDER", reroll: "REROLL", motif: "MOTIF", vol: "VOLUME", flt: "FILTRE", space: "ESPACE", filter: "FILTRE", intensity: "INTENSITÉ",
     melody: "MÉLODIE", tension: "TENSION", mutation: "MUTATION", playIt: "JOUER", keep: "GARDER", clear: "EFFACER", empty: "vide", listen: "ÉCOUTER", use: "UTILISER",
-    factory: "usine", noFm1: "Pas de FM-1 trouvée : branche-la avec un câble USB de données, puis appuie sur Connecter.", noMidi: "Ce navigateur n'a pas WebMIDI : utilise Chrome ou Edge sur un ordinateur ou un téléphone Android.",
+    factory: "usine", noFm1: "Pas de FM-1 trouvée : branche-la avec un câble USB de données (sans hub), puis appuie sur Connecter. Ports MIDI vus : {p}.", searching: "Recherche de la FM-1...", oldFw: "Ta FM-1 a {v}. SIREN STUDIO demande SIREN 0.10 : installe-la (INSTALL-SIREN.bat, le titre de la fenêtre dit S I R E N 0.10), puis appuie sur Connecter.", noAnswer: "La FM-1 ne répond pas. Vérifie que SIREN 0.10 est installée (en bas de la page GLO : SIREN 0.10), ferme les autres pages et programmes qui utilisent son MIDI (l'installateur, l'éditeur, un logiciel de musique), débranche-la et rebranche-la, puis appuie sur Connecter. Ports MIDI vus : {p}.", inUse: "Le MIDI de la FM-1 est pris par un autre programme : ferme-le (logiciel de musique, autre éditeur, l'installateur dans un autre navigateur), puis appuie sur Connecter. Ports MIDI vus : {p}.", noMidi: "Ce navigateur n'a pas WebMIDI : utilise Chrome ou Edge sur un ordinateur ou un téléphone Android.",
     denied: "Le MIDI n'a pas été autorisé : autorise-le dans le navigateur, puis appuie sur Connecter.", notSiren: "La FM-1 ne tourne pas sous SIREN 0.10 ou plus récent : installe-le d'abord.",
     connected: "Connectée", lost: "La FM-1 ne répond plus", added: "seeds ajoutées", replaced: "seeds envoyées", bad: "pas compris", full: "plus de case libre",
     sent: "Envoyé : à partir du morceau suivant (gardé dans la FM-1 une fois arrêtée)", oneAtLeast: "Garde au moins un son", reset: "Revenu à l'usine", stoppedListen: "Appuie sur PLAY pour l'entendre",
@@ -227,14 +227,14 @@ class Rd { constructor(d) { this.d = d; this.o = 0; } b() { return this.d[this.o
   u32() { let v = 0; for (let i = 4; i >= 0; i--) v = v * 128 + this.d[this.o + i]; this.o += 5; return v >>> 0; }
   u64() { let v = 0n; for (let i = 9; i >= 0; i--) v = (v << 7n) | BigInt(this.d[this.o + i]); this.o += 10; return v; }
   s() { let s = ""; while (this.o < this.d.length && this.d[this.o]) s += String.fromCharCode(this.d[this.o++]); this.o++; return s; } }
-function request(cmd, args = []) {
-  return new Promise((res, rej) => { queue.push({cmd, args, res, rej}); pump(); });
+function request(cmd, args = [], ms = 1500) {
+  return new Promise((res, rej) => { queue.push({cmd, args, res, rej, ms}); pump(); });
 }
 function pump() {
   if (busy || !queue.length || !midiOut) return;
   busy = queue.shift();
   try { midiOut.send([0xF0, 0x7D, 0x46, 0x4C, busy.cmd, ...busy.args, 0xF7]); } catch (e) { const b = busy; busy = null; b.rej(e); pump(); return; }
-  busy.timer = setTimeout(() => { const b = busy; busy = null; b.rej(new Error("timeout")); pump(); }, 1500);
+  busy.timer = setTimeout(() => { const b = busy; busy = null; b.rej(new Error("timeout")); pump(); }, busy.ms);
 }
 function onMidi(ev) {
   const d = ev.data;
@@ -248,22 +248,73 @@ const act = (kind, a = 0, v = 0) => request(SR.ACT, [kind, a & 127, ...v14(v)]).
 
 /* ---- connecting */
 let info = null, names = [], px = [], state = null, seeds = [], pollTimer = null, stateSeq = 0;
-function status(k, cls) { const s = $("status"); s.textContent = t(k); s.dataset.k = k; s.className = cls || ""; }
+/* the status line: a message of T, with what was found ({v}: a version, {p}: the MIDI ports seen) */
+function status(k, cls, extra) {
+  const s = $("status"); s.dataset.k = k; s.dataset.x = JSON.stringify(extra || {}); s.className = cls || ""; statusText();
+}
+function statusText() {
+  const s = $("status"), k = s.dataset.k; if (!k) return;
+  let x = {}; try { x = JSON.parse(s.dataset.x || "{}"); } catch (e) {}
+  s.textContent = t(k).replace("{v}", x.v || "?").replace("{p}", x.p || "-") + (k === "connected" && info ? " · " + info.ver : "");
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function unhook() {
+  if (midiIn) midiIn.onmidimessage = null;
+  if (busy) { clearTimeout(busy.timer); busy.rej(new Error("closed")); busy = null; }
+  for (const q of queue.splice(0)) q.rej(new Error("closed"));
+  midiIn = midiOut = null;
+}
+/* one pair of ports: opened first (a reply that comes before the port is open is lost), then SIREN STUDIO's INFO,
+   a few times; else the editor's INFO (cmd 1, every Clipper / SLOOP / SIREN answers it) for the version installed */
+async function probe(inp, out) {
+  unhook();
+  try { await inp.open(); await out.open(); } catch (e) { return {busy: true}; }
+  midiIn = inp; midiOut = out; midiIn.onmidimessage = onMidi;
+  await sleep(150);
+  for (let i = 0; i < 3; i++) {
+    try {
+      const r = await request(SR.INFO, [], 800);
+      const ver = r.s(), proto = r.b(); r.b(); r.b();
+      const nuni = []; for (let L = 0; L < 7; L++) nuni.push(r.b());
+      if (/^SIREN/.test(ver) && proto >= 1) return {info: {ver, proto, nuni}};
+      break;
+    } catch (e) { if (e.message === "closed") return {}; }
+  }
+  try { const r = await request(1, [], 800); const v = r.s().replace(/^FELUCCA\s+/, ""); if (v) return {old: v}; } catch (e) {}
+  return {};
+}
+let connecting = false;
 async function connect() {
+  if (connecting) return;
+  connecting = true; $("conn").disabled = true;
+  try { await connect1(); } finally { connecting = false; $("conn").disabled = false; }
+}
+async function connect1() {
   if (!navigator.requestMIDIAccess) { status("noMidi", "bad"); return; }
   let acc;
   try { acc = await navigator.requestMIDIAccess({sysex: true}); } catch (e) { status("denied", "bad"); return; }
-  midiIn = [...acc.inputs.values()].find((p) => FM1_PORT.test(p.name)) || null;
-  midiOut = [...acc.outputs.values()].find((p) => FM1_PORT.test(p.name)) || null;
-  if (!midiIn || !midiOut) { status("noFm1", "bad"); return; }
-  midiIn.onmidimessage = onMidi;
-  try {
-    const r = await request(SR.INFO);
-    const ver = r.s(), proto = r.b(); r.b(); r.b();
-    const nuni = []; for (let L = 0; L < 7; L++) nuni.push(r.b());
-    if (!/^SIREN/.test(ver) || proto < 1) throw new Error("not SIREN");
-    info = {ver, proto, nuni};
-  } catch (e) { status("notSiren", "bad"); return; }
+  clearInterval(pollTimer); alive = false; info = null; unhook();
+  const ins = [...acc.inputs.values()], outs = [...acc.outputs.values()];
+  const seen = [...new Set([...ins, ...outs].map((p) => p.name))].join(", ");
+  /* the pairs to try: the FM-1's input with the output of the same name first, then its other outputs */
+  const pairs = [], fm1Out = outs.filter((o) => FM1_PORT.test(o.name));
+  for (const i of ins.filter((p) => FM1_PORT.test(p.name)))
+    for (const o of [...fm1Out.filter((o) => o.name === i.name), ...fm1Out.filter((o) => o.name !== i.name)]) pairs.push([i, o]);
+  if (!pairs.length) { status("noFm1", "bad", {p: seen}); return; }
+  status("searching", "");
+  let old = null, inUse = false;
+  for (const [i, o] of pairs) {
+    const r = await probe(i, o);
+    if (r.info) { info = r.info; break; }
+    if (r.old && !old) old = r.old;
+    if (r.busy) inUse = true;
+  }
+  if (!info) {
+    unhook();
+    if (old) status("oldFw", "bad", {v: old});
+    else status(inUse ? "inUse" : "noAnswer", "bad", {p: seen});
+    return;
+  }
   names = [];
   for (let L = 0; L < 7; L++) {
     const list = [];
@@ -499,7 +550,7 @@ async function saveBank() {
 function applyLang() {
   document.documentElement.lang = lang; $("lang").textContent = lang === "en" ? "FR" : "EN";
   document.querySelectorAll("[data-t]").forEach((e) => { if (T.en[e.dataset.t]) e.textContent = t(e.dataset.t); });
-  if ($("status").dataset.k) { const k = $("status").dataset.k; $("status").textContent = t(k) + (k === "connected" && info ? " · " + info.ver : ""); }
+  statusText();
   render(); renderSlots(); if (info) loadBank();
 }
 document.querySelectorAll("nav button").forEach((b) => b.onclick = () => {
