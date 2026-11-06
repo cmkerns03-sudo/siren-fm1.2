@@ -50,8 +50,10 @@ static struct {
     uint8_t info, style, lock_style, msg_t; char msg[20];   /* (0.8: info, the page open, SP_*) */
     int16_t knob[4];
     uint32_t fav[16]; uint8_t fav_set[16];
+    uint8_t fav_st[16];                          /* (0.10) its style (bits 0-2) and ALL SOUNDS (bit 3): a seed is a track of a style */
     uint8_t fav_dirty; uint32_t fav_t;           /* (0.9.2) kept seeds not in flash yet; the last try (project.c) */
     int8_t batt;                                 /* (0.9.2) the battery shown on the deck, %, -1 not read yet */
+    uint32_t vheld;                              /* (0.10) keys SIREN STUDIO holds (as the keyboard's bits) */
     uint8_t locks[7];
     uint8_t fx_was; int8_t px_key;               /* (0.2) FX held, the effect's key (-1) */
     /* (0.5) the hands on the mix: the layer chosen (SELECT), the variation's clicks; the master's filter and space; each
@@ -497,7 +499,7 @@ static void su_foot(void)
     uint32_t q = (uint32_t)song.cpu_q8 * 100u >> 8, fx = su.px_key >= 0;
     su_s_t nx = {{0}, 0};
     static const char *const HM[SP_N] = {"", "HOLD A KEY: ITS EFFECT", "1-8 THE STYLE  16 KEEP IT", "THE TRACK'S FORM",
-                                         "KNOBS: THE LAYER'S STRIP", "16 SEEDS", "SIREN 0.9.2"};
+                                         "KNOBS: THE LAYER'S STRIP", "16 SEEDS", "SIREN 0.10"};
     su_s_t hm = {{0}, 0};
     const char *m;
     int32_t bp = su_batt_pct();

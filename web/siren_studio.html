@@ -1,0 +1,541 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     SIREN STUDIO (SIREN 0.10): the FM-1 running SIREN, from a browser (Chrome or Edge; WebMIDI with SysEx), over USB.
+     LIVE: every gesture of the FM-1 at once (no page to open); SEEDS: the 16 SAVE slots, codes to share ("PSY 11R-3N07"),
+     files; SOUNDS: each style's bank for each of the 7 layers, chosen among every sound (kept in the FM-1).
+     The protocol: firmware/src/editor_siren.c (SysEx F0 7D 46 4C 100..110 F7). make_site.py serves it at
+     webapp/studio/. One file: nothing loaded from elsewhere. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIREN STUDIO</title>
+<style>
+:root{--bg:#090a0e;--panel:#14161d;--panel2:#1c1f28;--line:#2a2e3a;--txt:#eef0f4;--dim:#9aa1b2;--acc:#ff6a1a;--blue:#2f7cf6;--green:#22c55e;--yellow:#fbbf24;--red:#ef4444;
+ --l0:#f0f0f0;--l1:#ff6a1a;--l2:#28c8e6;--l3:#ffaa1e;--l4:#966eff;--l5:#ff4678;--l6:#28d28c}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+button:hover{border-color:#4a5164}
+button.on{background:var(--acc);border-color:var(--acc);color:#140a04!important;font-weight:700}
+button.wait{border-color:var(--acc);color:var(--acc);animation:blink .8s steps(2) infinite}
+button:disabled{opacity:.4;cursor:default}
+@keyframes blink{50%{border-color:var(--line)}}
+header{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(9,10,14,.96);z-index:5;flex-wrap:wrap}
+.fam{height:4px;display:flex}.fam i{flex:1}
+.logo{font-weight:800;letter-spacing:.18em;font-size:18px}.logo small{color:var(--acc);letter-spacing:.1em;margin-left:6px}
+#conn{margin-left:auto}
+#status{color:var(--dim);font-size:13px}
+#status.bad{color:var(--red)}#status.good{color:var(--green)}
+nav{display:flex;gap:6px}
+nav button{padding:8px 14px}
+main{padding:16px 18px 40px;max-width:1280px;margin:0 auto}
+section.tab{display:none}section.tab.show{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}
+.card h2{margin:0 0 10px;font-size:13px;letter-spacing:.14em;color:var(--dim);font-weight:700;text-transform:uppercase}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grid{display:grid;gap:8px}
+.g8{grid-template-columns:repeat(8,1fr)}.g4{grid-template-columns:repeat(4,1fr)}.g11{grid-template-columns:repeat(11,1fr)}
+@media(max-width:900px){.g8{grid-template-columns:repeat(4,1fr)}.g11{grid-template-columns:repeat(4,1fr)}}
+.big{font-size:22px;font-weight:800;padding:14px 22px}
+#play.on{background:var(--green);border-color:var(--green)}
+.deck{display:flex;gap:18px;align-items:baseline;flex-wrap:wrap}
+.deck .v{font-size:26px;font-weight:800}.deck .k{color:var(--dim);font-size:12px;letter-spacing:.1em;text-transform:uppercase}
+.sec{font-size:26px;font-weight:800}.sec .nx{color:var(--acc)}
+.pad{min-height:62px;font-weight:700;font-size:13px}
+.pad.on{background:var(--acc)}
+.form{min-height:54px;font-weight:700;font-size:13px}
+.strips{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+@media(max-width:1000px){.strips{grid-template-columns:repeat(2,1fr)}}
+.strip{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.strip .nm{font-weight:800;letter-spacing:.08em}
+.strip .snd{font-size:12px;color:var(--dim);min-height:32px}
+.strip .snd b{color:var(--txt)}
+.strip .btns{display:flex;gap:4px;flex-wrap:wrap}.strip .btns button{padding:6px 8px;font-size:12px;flex:1}
+.strip.focus{border-color:var(--acc)}
+label.sl{display:flex;flex-direction:column;font-size:11px;color:var(--dim);gap:2px}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.knobs{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}
+@media(max-width:900px){.knobs{grid-template-columns:repeat(2,1fr)}}
+.kbd{position:relative;height:150px;user-select:none;-webkit-user-select:none;touch-action:none}
+.kbd .w,.kbd .b{position:absolute;border-radius:0 0 8px 8px;border:1px solid #222}
+.kbd .w{background:#e8e8ec;top:0;height:150px}.kbd .b{background:#1a1b20;top:0;height:92px;z-index:2}
+.kbd .w.on,.kbd .b.on{background:var(--acc)}
+#msg{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--acc);color:var(--acc);padding:8px 16px;border-radius:10px;font-weight:700;letter-spacing:.06em;display:none;z-index:9}
+.slots{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:900px){.slots{grid-template-columns:repeat(2,1fr)}}
+.slot{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.slot .n{color:var(--dim);font-size:12px}.slot .code{font:700 16px ui-monospace,Consolas,monospace;letter-spacing:.05em;min-height:22px}
+.slot .btns{display:flex;gap:4px}.slot .btns button{flex:1;padding:6px;font-size:12px}
+.slot.now{border-color:var(--acc)}
+textarea{width:100%;min-height:90px;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:10px;font:14px ui-monospace,Consolas,monospace}
+.list{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+@media(max-width:900px){.list{grid-template-columns:1fr}}
+.item{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6px 8px}
+.item input{width:20px;height:20px;accent-color:var(--acc)}
+.item .t{flex:1;font-size:13px}.item .t small{display:block;color:var(--dim);font-size:11px}
+.item button{padding:4px 8px;font-size:12px}
+.item.playing{border-color:var(--acc)}
+.tag{display:inline-block;font-size:10px;padding:1px 5px;border-radius:5px;background:#2a2e3a;color:var(--dim);margin-right:3px}
+.tag.mine{background:#3a2412;color:var(--acc)}
+.note{color:var(--dim);font-size:13px}
+.lay{font-weight:800}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<div class="fam"><i style="background:var(--blue)"></i><i style="background:var(--green)"></i><i style="background:var(--yellow)"></i><i style="background:var(--acc)"></i></div>
+<header>
+  <div class="logo">SIREN<small>STUDIO</small></div>
+  <nav><button data-tab="live" class="on" data-t="tLive">LIVE</button><button data-tab="seeds" data-t="tSeeds">SEEDS</button><button data-tab="sounds" data-t="tSounds">SOUNDS</button></nav>
+  <span id="status" data-t="notConnected">Not connected</span>
+  <button id="conn" data-t="connect">Connect the FM-1</button>
+  <button id="lang">FR</button>
+</header>
+<main>
+<!-- LIVE -->
+<section class="tab show" id="tab-live">
+  <div class="card">
+    <div class="row">
+      <button id="play" class="big" data-t="play">PLAY</button>
+      <button id="rec" class="big" data-t="newRave">NEW RAVE</button>
+      <div class="deck">
+        <div><div class="k" data-t="style">Style</div><div class="v" id="dStyle">-</div></div>
+        <div><div class="k" data-t="key">Key</div><div class="v" id="dKey">-</div></div>
+        <div><div class="k">BPM</div><div class="v" id="dBpm">-</div></div>
+        <div><div class="k" data-t="section">Section</div><div class="sec" id="dSec">-</div></div>
+        <div><div class="k">Seed</div><div class="v" id="dSeed" style="font-family:ui-monospace,Consolas,monospace">-</div></div>
+        <div><div class="k">CPU</div><div class="v" id="dCpu">-</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="card"><h2 data-t="hStyle">Style · comes in on the next phrase (press again: now)</h2>
+    <div class="grid g8" id="styles"></div>
+    <div class="row" style="margin-top:8px"><button id="all" data-t="allSounds">ALL SOUNDS</button><button id="keep" data-t="keepStyle">KEEP THIS STYLE</button><span class="note" data-t="allNote">ALL SOUNDS: the next tracks pick from every bank (drums too).</span></div>
+  </div>
+  <div class="card"><h2 data-t="hForm">The track's form · on the beat</h2><div class="grid g11" id="forms"></div></div>
+  <div class="card"><h2 data-t="hFx">DJ effects · hold a pad</h2><div class="grid g8" id="fx"></div></div>
+  <div class="card"><h2 data-t="hMix">The 7 layers</h2><div class="strips" id="strips"></div>
+    <div class="row" style="margin-top:8px"><button id="flat" data-t="flat">MIX FLAT</button><button id="give" data-t="giveBack">GIVE EVERYTHING BACK TO SIREN</button></div></div>
+  <div class="card"><h2 data-t="hKnobs">Knobs</h2><div class="knobs" id="knobs"></div></div>
+  <div class="card"><h2><span data-t="hKeys">Keyboard · plays</span> <span class="lay" id="kLay">HOOK</span></h2>
+    <div class="row" style="margin-bottom:8px"><button id="octd">OCT −</button><span id="kOct" class="note">0</span><button id="octu">OCT +</button><button id="arp" data-t="arp">ARP</button><span class="note" data-t="keysNote">The first note takes the layer (LIVE); GIVE BACK returns it to SIREN.</span></div>
+    <div class="kbd" id="kbd"></div></div>
+</section>
+<!-- SEEDS -->
+<section class="tab" id="tab-seeds">
+  <div class="card"><h2 data-t="hNow">The track playing</h2>
+    <div class="row"><span class="code" id="nowCode" style="font:800 22px ui-monospace,Consolas,monospace">-</span><button id="copyNow" data-t="copy">COPY</button><span class="note" data-t="shareNote">Share this code: anyone can play the same track.</span></div></div>
+  <div class="card"><h2 data-t="hSlots">Your 16 seeds (the SAVE page) · kept in the FM-1</h2><div class="slots" id="slots"></div></div>
+  <div class="card"><h2 data-t="hImport">Import seeds</h2>
+    <p class="note" data-t="importNote">Paste codes, one per line, as "PSY 11R-3N07" (add ALL for ALL SOUNDS). Or open a .json file.</p>
+    <textarea id="codes" placeholder="PSY 11R-3N07&#10;TECHNO 2FQ-9KD1 ALL"></textarea>
+    <div class="row" style="margin-top:8px"><button id="addCodes" data-t="addFree">ADD TO FREE SLOTS</button><button id="repCodes" data-t="replaceAll">REPLACE MY 16 SEEDS</button>
+      <label class="note"><input type="file" id="file" accept=".json,application/json"> <span data-t="openFile">open a file</span></label>
+      <button id="export" data-t="export">SAVE MY SEEDS TO A FILE</button><span id="impMsg" class="note"></span></div></div>
+</section>
+<!-- SOUNDS -->
+<section class="tab" id="tab-sounds">
+  <div class="card"><h2 data-t="hBank">Each style's bank, for each layer</h2>
+    <div class="grid g8" id="bStyles"></div>
+    <div class="grid" style="grid-template-columns:repeat(7,1fr);margin-top:8px" id="bLayers"></div>
+    <p class="note" data-t="bankNote">Tick the sounds this style may pick on this layer. They count from the next track, and the FM-1 keeps them once the music is stopped. LISTEN plays a sound now (while it plays); USE keeps it on the layer.</p>
+    <div class="row"><button id="bAll" data-t="tickAll">TICK ALL</button><button id="bNone" data-t="tickFactory">ONLY THE FACTORY'S</button><button id="bSave" class="on" data-t="saveBank">SEND TO THE FM-1</button><button id="bReset" data-t="resetBank">THIS BANK: FACTORY</button><button id="bResetAll" data-t="resetAll">EVERY BANK: FACTORY</button><span id="bMsg" class="note"></span></div>
+  </div>
+  <div class="card"><div class="list" id="bList"></div></div>
+</section>
+</main>
+<div id="msg"></div>
+<script>
+"use strict";
+const STY = ["TECHNO", "TRANCE", "PSY", "ACID", "RAVE", "HARD", "DRUM & BASS", "HOUSE"];
+const STY_CODE = ["TECHNO", "TRANCE", "PSY", "ACID", "RAVE", "HARD", "DNB", "HOUSE"];
+const LAY = ["DRUMS", "BASS", "ARP", "HOOK", "PAD", "STABS", "FX"];
+const SEC = ["INTRO", "GROOVE", "BUILD", "DROP", "BREAK", "PEAK", "OUTRO"];
+const NOTE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const SCALE = ["MINOR", "DORIAN", "PHRYGIAN", "HARMONIC", "MAJOR"];
+const FORM = ["BREAK", "BUILD 4", "BUILD 16", "DROP", "FILL", "NEW MELODY", "NEW BASS", "NEW GROOVE", "KEY UP", "NEXT TRACK", "STAY"];
+const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const WHITE = [0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26], BLACK = [1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25];
+const FM1_PORT = /fm-1|felucca|sloop|clipper|siren|kayo|composite|sinco|usb-midi/i;
+const SR = {INFO: 100, NAMES: 101, STATE: 102, ACT: 103, SEEDS: 104, SEEDS_PUT: 105, BANK: 106, BANK_PUT: 107, BANK_RESET: 108, AUDITION: 109, PX: 110};
+const SA = {PLAY: 0, REC: 1, FORM: 2, FX_DOWN: 3, FX_UP: 4, STYLE: 5, ALL: 6, KEEPSTYLE: 7, MUTE: 8, FLAT: 9, STRIP: 10, DJKNOB: 11,
+  GLOKNOB: 12, FOCUS: 13, PRESET: 14, SOUND: 15, ALGO: 16, LOCK: 17, REROLL: 18, ARP: 19, OCT: 20, GIVEBACK: 21, NOTE_ON: 22,
+  NOTE_OFF: 23, SEED_PLAY: 24, SEED_KEEP: 25, SEED_CLEAR: 26, PAGE: 27};
+const T = {
+  en: {tLive: "LIVE", tSeeds: "SEEDS", tSounds: "SOUNDS", notConnected: "Not connected", connect: "Connect the FM-1", play: "PLAY", stop: "STOP",
+    newRave: "NEW RAVE", style: "Style", key: "Key", section: "Section", battery: "Battery", hStyle: "Style · comes in on the next phrase (press again: now)",
+    allSounds: "ALL SOUNDS", keepStyle: "KEEP THIS STYLE", allNote: "ALL SOUNDS: the next tracks pick from every bank (drums too).",
+    hForm: "The track's form · on the beat", hFx: "DJ effects · hold a pad", hMix: "The 7 layers", flat: "MIX FLAT", giveBack: "GIVE EVERYTHING BACK TO SIREN",
+    hKnobs: "Knobs", hKeys: "Keyboard · plays", arp: "ARP", keysNote: "The first note takes the layer (LIVE); GIVE BACK returns it to SIREN.",
+    hNow: "The track playing", copy: "COPY", shareNote: "Share this code: anyone can play the same track.", hSlots: "Your 16 seeds (the SAVE page) · kept in the FM-1",
+    hImport: "Import seeds", importNote: "Paste codes, one per line, as \"PSY 11R-3N07\" (add ALL for ALL SOUNDS). Or open a .json file.",
+    addFree: "ADD TO FREE SLOTS", replaceAll: "REPLACE MY 16 SEEDS", openFile: "open a file", export: "SAVE MY SEEDS TO A FILE",
+    hBank: "Each style's bank, for each layer", bankNote: "Tick the sounds this style may pick on this layer. They count from the next track, and the FM-1 keeps them once the music is stopped. LISTEN plays a sound now (while it plays); USE keeps it on the layer.",
+    tickAll: "TICK ALL", tickFactory: "ONLY THE FACTORY'S", saveBank: "SEND TO THE FM-1", resetBank: "THIS BANK: FACTORY", resetAll: "EVERY BANK: FACTORY",
+    mute: "MUTE", lock: "KEEP", reroll: "REROLL", motif: "MOTIF", vol: "VOLUME", flt: "FILTER", space: "SPACE", filter: "FILTER", intensity: "INTENSITY",
+    melody: "MELODY", tension: "TENSION", mutation: "MUTATION", playIt: "PLAY", keep: "KEEP", clear: "CLEAR", empty: "empty", listen: "LISTEN", use: "USE",
+    factory: "factory", noFm1: "No FM-1 found: plug it in with a USB data cable, then press Connect.", noMidi: "This browser has no WebMIDI: use Chrome or Edge on a computer or an Android phone.",
+    denied: "MIDI was not allowed: allow it in the browser, then press Connect.", notSiren: "The FM-1 does not run SIREN 0.10 or newer: install it first.",
+    connected: "Connected", lost: "The FM-1 stopped answering", added: "seeds added", replaced: "seeds sent", bad: "not understood", full: "no free slot left",
+    sent: "Sent: from the next track (kept in the FM-1 once stopped)", oneAtLeast: "Keep at least one sound", reset: "Back to the factory's", stoppedListen: "Press PLAY to hear it",
+    copied: "Copied", inBank: "in its bank", otherStyle: "from"},
+  fr: {tLive: "LIVE", tSeeds: "SEEDS", tSounds: "SONS", notConnected: "Pas connectée", connect: "Connecter la FM-1", play: "PLAY", stop: "STOP",
+    newRave: "NOUVELLE RAVE", style: "Style", key: "Tonalité", section: "Section", battery: "Batterie", hStyle: "Style · arrive à la phrase suivante (encore : tout de suite)",
+    allSounds: "ALL SOUNDS", keepStyle: "GARDER CE STYLE", allNote: "ALL SOUNDS : les morceaux suivants piochent dans toutes les banks (la batterie aussi).",
+    hForm: "La forme du morceau · sur le temps", hFx: "Effets DJ · garde un pad appuyé", hMix: "Les 7 couches", flat: "MIX À PLAT", giveBack: "TOUT RENDRE À SIREN",
+    hKnobs: "Boutons", hKeys: "Clavier · joue", arp: "ARP", keysNote: "La première note prend la couche (LIVE) ; RENDRE la rend à SIREN.",
+    hNow: "Le morceau qui joue", copy: "COPIER", shareNote: "Partage ce code : n'importe qui peut jouer le même morceau.", hSlots: "Tes 16 seeds (la page SAVE) · gardées dans la FM-1",
+    hImport: "Importer des seeds", importNote: "Colle des codes, un par ligne, comme « PSY 11R-3N07 » (ajoute ALL pour ALL SOUNDS). Ou ouvre un fichier .json.",
+    addFree: "AJOUTER DANS LES CASES LIBRES", replaceAll: "REMPLACER MES 16 SEEDS", openFile: "ouvrir un fichier", export: "ENREGISTRER MES SEEDS DANS UN FICHIER",
+    hBank: "La bank de chaque style, pour chaque couche", bankNote: "Coche les sons que ce style peut prendre sur cette couche. Ça compte à partir du morceau suivant, et la FM-1 les garde une fois la musique arrêtée. ÉCOUTER joue un son tout de suite (pendant que ça joue) ; UTILISER le garde sur la couche.",
+    tickAll: "TOUT COCHER", tickFactory: "SEULEMENT CEUX D'USINE", saveBank: "ENVOYER À LA FM-1", resetBank: "CETTE BANK : USINE", resetAll: "TOUTES LES BANKS : USINE",
+    mute: "MUET", lock: "GARDER", reroll: "REROLL", motif: "MOTIF", vol: "VOLUME", flt: "FILTRE", space: "ESPACE", filter: "FILTRE", intensity: "INTENSITÉ",
+    melody: "MÉLODIE", tension: "TENSION", mutation: "MUTATION", playIt: "JOUER", keep: "GARDER", clear: "EFFACER", empty: "vide", listen: "ÉCOUTER", use: "UTILISER",
+    factory: "usine", noFm1: "Pas de FM-1 trouvée : branche-la avec un câble USB de données, puis appuie sur Connecter.", noMidi: "Ce navigateur n'a pas WebMIDI : utilise Chrome ou Edge sur un ordinateur ou un téléphone Android.",
+    denied: "Le MIDI n'a pas été autorisé : autorise-le dans le navigateur, puis appuie sur Connecter.", notSiren: "La FM-1 ne tourne pas sous SIREN 0.10 ou plus récent : installe-le d'abord.",
+    connected: "Connectée", lost: "La FM-1 ne répond plus", added: "seeds ajoutées", replaced: "seeds envoyées", bad: "pas compris", full: "plus de case libre",
+    sent: "Envoyé : à partir du morceau suivant (gardé dans la FM-1 une fois arrêtée)", oneAtLeast: "Garde au moins un son", reset: "Revenu à l'usine", stoppedListen: "Appuie sur PLAY pour l'entendre",
+    copied: "Copié", inBank: "dans sa bank", otherStyle: "de"}};
+let lang = (navigator.language || "en").toLowerCase().startsWith("fr") ? "fr" : "en";
+try { const l = localStorage.getItem("siren-studio-lang"); if (l === "en" || l === "fr") lang = l; } catch (e) {}
+const t = (k) => (T[lang][k] ?? T.en[k] ?? k);
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
+
+/* ---- the codes: a seed as the FM-1 writes it (siren_brain.c sb_code), with its style */
+function seedCode(s) { let o = ""; for (let i = 0; i < 7; i++) { o = B32[s & 31] + o; s = Math.floor(s / 32); } return o.slice(0, 3) + "-" + o.slice(3); }
+function seedUncode(c) { let s = 0; for (const ch of c.toUpperCase()) { const v = B32.indexOf(ch); if (v >= 0) s = (s * 32 + v) % 4294967296; } return s >>> 0; }
+function fullCode(style, seed, all) { return STY_CODE[style] + " " + seedCode(seed) + (all ? " ALL" : ""); }
+function parseCodes(text) {
+  const out = [];
+  for (const line of text.split(/[\n,;]+/)) {
+    const m = line.trim().toUpperCase().match(/^(TECHNO|TRANCE|PSY|ACID|RAVE|HARD|DNB|DRUM\s*&\s*BASS|D&B|HOUSE)\s+([0-9A-Z]{3}-?[0-9A-Z]{4})(\s+ALL)?$/);
+    if (!m) { if (line.trim()) out.push(null); continue; }
+    let st = STY_CODE.indexOf(m[1]); if (st < 0) st = 6;
+    out.push({style: st, seed: seedUncode(m[2].replace("-", "")), all: !!m[3]});
+  }
+  return out;
+}
+
+/* ---- the wire: SysEx F0 7D 46 4C cmd .. F7, one request at a time, its reply by its cmd */
+let midiIn = null, midiOut = null, queue = [], busy = null, alive = false;
+const v14 = (v) => { const u = Math.max(-8192, Math.min(8191, Math.round(v))) + 8192; return [u & 127, (u >> 7) & 127]; };
+const u32b = (v) => { const o = []; for (let i = 0; i < 5; i++) { o.push(v & 127); v = Math.floor(v / 128); } return o; };
+const u64b = (v) => { const o = []; for (let i = 0; i < 10; i++) { o.push(Number(v & 127n)); v >>= 7n; } return o; };
+class Rd { constructor(d) { this.d = d; this.o = 0; } b() { return this.d[this.o++]; } v() { const a = this.d[this.o++], b = this.d[this.o++]; return (a | b << 7) - 8192; }
+  u32() { let v = 0; for (let i = 4; i >= 0; i--) v = v * 128 + this.d[this.o + i]; this.o += 5; return v >>> 0; }
+  u64() { let v = 0n; for (let i = 9; i >= 0; i--) v = (v << 7n) | BigInt(this.d[this.o + i]); this.o += 10; return v; }
+  s() { let s = ""; while (this.o < this.d.length && this.d[this.o]) s += String.fromCharCode(this.d[this.o++]); this.o++; return s; } }
+function request(cmd, args = []) {
+  return new Promise((res, rej) => { queue.push({cmd, args, res, rej}); pump(); });
+}
+function pump() {
+  if (busy || !queue.length || !midiOut) return;
+  busy = queue.shift();
+  try { midiOut.send([0xF0, 0x7D, 0x46, 0x4C, busy.cmd, ...busy.args, 0xF7]); } catch (e) { const b = busy; busy = null; b.rej(e); pump(); return; }
+  busy.timer = setTimeout(() => { const b = busy; busy = null; b.rej(new Error("timeout")); pump(); }, 1500);
+}
+function onMidi(ev) {
+  const d = ev.data;
+  if (d[0] !== 0xF0 || d[1] !== 0x7D || d[2] !== 0x46 || d[3] !== 0x4C || !busy || d[4] !== busy.cmd) return;
+  clearTimeout(busy.timer);
+  const b = busy; busy = null;
+  b.res(new Rd(Array.from(d.slice(5, d.length - 1))));
+  pump();
+}
+const act = (kind, a = 0, v = 0) => request(SR.ACT, [kind, a & 127, ...v14(v)]).catch(() => {});
+
+/* ---- connecting */
+let info = null, names = [], px = [], state = null, seeds = [], pollTimer = null, stateSeq = 0;
+function status(k, cls) { const s = $("status"); s.textContent = t(k); s.dataset.k = k; s.className = cls || ""; }
+async function connect() {
+  if (!navigator.requestMIDIAccess) { status("noMidi", "bad"); return; }
+  let acc;
+  try { acc = await navigator.requestMIDIAccess({sysex: true}); } catch (e) { status("denied", "bad"); return; }
+  midiIn = [...acc.inputs.values()].find((p) => FM1_PORT.test(p.name)) || null;
+  midiOut = [...acc.outputs.values()].find((p) => FM1_PORT.test(p.name)) || null;
+  if (!midiIn || !midiOut) { status("noFm1", "bad"); return; }
+  midiIn.onmidimessage = onMidi;
+  try {
+    const r = await request(SR.INFO);
+    const ver = r.s(), proto = r.b(); r.b(); r.b();
+    const nuni = []; for (let L = 0; L < 7; L++) nuni.push(r.b());
+    if (!/^SIREN/.test(ver) || proto < 1) throw new Error("not SIREN");
+    info = {ver, proto, nuni};
+  } catch (e) { status("notSiren", "bad"); return; }
+  names = [];
+  for (let L = 0; L < 7; L++) {
+    const list = [];
+    while (list.length < info.nuni[L]) {
+      const r = await request(SR.NAMES, [L, list.length]); r.b(); r.b(); const n = r.b();
+      if (!n) break;
+      for (let i = 0; i < n; i++) { const eng = r.s(), nm = r.s(), f = r.b() | r.b() << 7; list.push({eng, nm, fact: f}); }
+    }
+    names.push(list);
+  }
+  px = [];
+  for (let s = 0; s < 8; s++) { const r = await request(SR.PX, [s]); r.b(); const l = []; for (let i = 0; i < 16; i++) l.push(r.s()); px.push(l); }
+  alive = true; status("connected", "good"); $("status").textContent = t("connected") + " · " + info.ver;
+  await loadSeeds(); await loadBank();
+  clearInterval(pollTimer); pollTimer = setInterval(poll, 140); poll();
+}
+async function poll() {
+  if (queue.length > 2) return;
+  try { state = readState(await request(SR.STATE)); stateSeq++; render(); slidesAfterState(); }
+  catch (e) { if (alive) { alive = false; status("lost", "bad"); } return; }
+  if (!alive) { alive = true; status("connected", "good"); }
+}
+function readState(r) {
+  const s = {}; const f = r.b();
+  s.playing = !!(f & 1); s.all = !!(f & 2); s.keepStyle = !!(f & 4); s.live = !!(f & 8); s.larp = !!(f & 16); s.stay = !!(f & 32);
+  s.lean = r.b(); s.style = r.b(); s.ustyle = r.b(); s.qstyle = r.b() - 1; s.qnext = r.b(); s.seed = r.u32();
+  s.bpm = r.v(); s.key = r.b(); s.scale = r.b(); s.sec = r.b(); s.secBar = r.v(); s.secLen = r.v(); s.next = r.b() - 1; s.req = r.b();
+  s.page = r.b(); s.focus = r.b(); s.oct = r.v(); s.px = r.b() - 1; s.L = [];
+  for (let L = 0; L < 7; L++) s.L.push({mute: r.b(), lock: r.b(), j: r.b() - 1, from: r.b() - 1, vol: r.v(), flt: r.v(), space: r.v()});
+  s.mfilt = r.v(); s.space = r.v(); s.knob = [r.v(), r.v(), r.v(), r.v()]; s.cpu = r.v(); s.batt = r.v();
+  s.fav = r.b() | r.b() << 7 | r.b() << 14; s.msg = r.s();
+  return s;
+}
+
+/* ---- LIVE */
+function sndName(L, j) { const n = names[L] && names[L][j]; return n ? (n.eng ? n.eng + " · " : "") + n.nm : "-"; }
+function buildLive() {
+  const sty = $("styles"); sty.innerHTML = "";
+  STY.forEach((n, i) => { const b = el("button", "pad", n); b.onclick = () => act(SA.STYLE, i); sty.appendChild(b); });
+  const fo = $("forms"); fo.innerHTML = "";
+  FORM.forEach((n, i) => { const b = el("button", "form", n); b.onclick = () => act(SA.FORM, i); fo.appendChild(b); });
+  const fx = $("fx"); fx.innerHTML = "";
+  for (let k = 0; k < 16; k++) {
+    const b = el("button", "pad", (k + 1) + "");
+    const down = (e) => { e.preventDefault(); b.classList.add("on"); act(SA.FX_DOWN, k); };
+    const up = () => { if (b.classList.contains("on")) { b.classList.remove("on"); act(SA.FX_UP); } };
+    b.addEventListener("pointerdown", down); b.addEventListener("pointerup", up); b.addEventListener("pointerleave", up); b.addEventListener("pointercancel", up);
+    fx.appendChild(b);
+  }
+  const st = $("strips"); st.innerHTML = "";
+  LAY.forEach((n, L) => {
+    const d = el("div", "strip"); d.id = "strip" + L;
+    const nm = el("div", "nm", n); nm.style.color = "var(--l" + L + ")"; nm.style.cursor = "pointer"; nm.onclick = () => act(SA.FOCUS, L); d.appendChild(nm);
+    const sn = el("div", "snd"); sn.id = "snd" + L; d.appendChild(sn);
+    const bt = el("div", "btns");
+    const mk = (lbl, f, id) => { const b = el("button", "", lbl); b.dataset.t = lbl; if (id) b.id = id; b.onclick = f; bt.appendChild(b); return b; };
+    mk("◀", () => act(SA.PRESET, L, -1)); mk("▶", () => act(SA.PRESET, L, 1));
+    mk(t("mute"), () => act(SA.MUTE, L), "mute" + L).dataset.t = "mute";
+    mk(t("lock"), () => act(SA.LOCK, L), "lock" + L).dataset.t = "lock";
+    mk(t("reroll"), () => act(SA.REROLL, L)).dataset.t = "reroll";
+    mk(t("motif"), () => act(SA.ALGO, L, 1)).dataset.t = "motif";
+    d.appendChild(bt);
+    [["vol", 0, -30, 12, 1], ["flt", 1, -60, 60, 2], ["space", 2, 0, 200, 5]].forEach(([k, p, lo, hi, step]) => {
+      const lab = el("label", "sl"); const sp = el("span", "", t(k)); sp.dataset.t = k; lab.appendChild(sp);
+      const r = el("input"); r.type = "range"; r.min = lo; r.max = hi; r.step = step; r.id = "s" + L + "_" + p;
+      r.oninput = () => slide(r, () => state && state.L[L][["vol", "flt", "space"][p]], step, (d) => act(SA.STRIP, L * 4 + p, d));
+      lab.appendChild(r); d.appendChild(lab);
+    });
+    st.appendChild(d);
+  });
+  const kn = $("knobs"); kn.innerHTML = "";
+  [["filter", -60, 60, 2, () => state.mfilt, (d) => act(SA.DJKNOB, 0, d)], ["intensity", 0, 1000, 20, () => state.knob[0], (d) => act(SA.DJKNOB, 1, d)],
+   ["space", 0, 200, 5, () => state.space, (d) => act(SA.DJKNOB, 2, d)], ["melody", 0, 1000, 20, () => state.knob[1], (d) => act(SA.DJKNOB, 3, d)],
+   ["tension", 0, 1000, 20, () => state.knob[2], (d) => act(SA.GLOKNOB, 0, d)], ["mutation", 0, 1000, 20, () => state.knob[3], (d) => act(SA.GLOKNOB, 1, d)]]
+    .forEach(([k, lo, hi, step, get, send], i) => {
+      const lab = el("label", "sl"); const sp = el("span", "", t(k)); sp.dataset.t = k; lab.appendChild(sp);
+      const r = el("input"); r.type = "range"; r.min = lo; r.max = hi; r.step = step; r.id = "knob" + i;
+      r.oninput = () => slide(r, () => state && get(), step, send);
+      lab.appendChild(r); kn.appendChild(lab);
+    });
+  buildKbd();
+}
+/* a slider: what the FM-1 has now -> steps of its knob (as the knob's own) */
+const sliding = new Map();
+const slidePend = new Map();                       /* (the next step waits for the FM-1's state after the last one) */
+function slide(r, cur, step, send) {
+  sliding.set(r.id, Date.now());
+  if (r.busy) { slidePend.set(r.id, () => slide(r, cur, step, send)); return; }
+  const c = cur(); if (c === undefined || c === null) return;
+  const d = Math.max(-60, Math.min(60, Math.round((Number(r.value) - c) / step)));
+  if (!d) return;
+  r.busy = true; r.seq = stateSeq;
+  send(d).finally(() => { r.waitSeq = stateSeq + 1; });
+}
+function slidesAfterState() {
+  for (const r of document.querySelectorAll("input[type=range]")) if (r.busy && stateSeq >= (r.waitSeq || 1e9)) {
+    r.busy = false; const f = slidePend.get(r.id); if (f) { slidePend.delete(r.id); f(); }
+  }
+}
+function setSlider(id, v) { const r = $(id); if (r && Date.now() - (sliding.get(id) || 0) > 600) r.value = v; }
+function buildKbd() {
+  const k = $("kbd"); k.innerHTML = "";
+  const W = 100 / 16;
+  WHITE.forEach((bit, i) => { const d = el("div", "w"); d.style.left = (i * W) + "%"; d.style.width = (W - 0.3) + "%"; keyEv(d, bit); k.appendChild(d); });
+  const after = [0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 14];
+  BLACK.forEach((bit, i) => { const d = el("div", "b"); d.style.left = ((after[i] + 1) * W - W * 0.3) + "%"; d.style.width = (W * 0.6) + "%"; keyEv(d, bit); k.appendChild(d); });
+}
+function keyEv(d, bit) {
+  const down = (e) => { e.preventDefault(); d.classList.add("on"); act(SA.NOTE_ON, bit, 100); };
+  const up = () => { if (d.classList.contains("on")) { d.classList.remove("on"); act(SA.NOTE_OFF, bit); } };
+  d.addEventListener("pointerdown", down); d.addEventListener("pointerup", up); d.addEventListener("pointerleave", up); d.addEventListener("pointercancel", up);
+}
+let msgT = null, lastMsg = "";
+function render() {
+  const s = state; if (!s) return;
+  const pl = $("play"); pl.classList.toggle("on", s.playing); pl.textContent = s.playing ? t("stop") : t("play");
+  $("dStyle").textContent = STY[s.style] || "-";
+  $("dKey").textContent = NOTE[s.key % 12] + " " + (SCALE[s.scale] || "");
+  $("dBpm").textContent = s.bpm;
+  const left = Math.max(0, s.secLen - s.secBar);
+  $("dSec").innerHTML = "";
+  $("dSec").append(SEC[s.sec] || "-");
+  if (s.next >= 0) { const nx = el("span", "nx", " → " + (SEC[s.next] || "") + " IN " + left); $("dSec").append(nx); }
+  $("dSeed").textContent = seedCode(s.seed);
+  $("dCpu").textContent = s.cpu + "%" + (s.lean ? " ECO" + s.lean : "");
+  [...$("styles").children].forEach((b, i) => { b.classList.toggle("on", i === s.style); b.classList.toggle("wait", i === s.qstyle && i !== s.style); });
+  $("all").classList.toggle("on", s.all); $("keep").classList.toggle("on", s.keepStyle);
+  [...$("forms").children].forEach((b, i) => { b.classList.toggle("wait", (i === 3 && !!(s.req & 1)) || (i === 8 && !!(s.req & 2)) || (i === 0 && !!(s.req & 4)) || ((i === 1 || i === 2) && !!(s.req & 8)) || (i === 9 && !!s.qnext)); b.classList.toggle("on", i === 10 && s.stay); });
+  const pn = px[s.style] || [];
+  [...$("fx").children].forEach((b, k) => { const n = pn[k] || (k + 1 + ""); if (b.textContent !== n) b.textContent = n; if (s.px !== k && !b.matches(":active")) b.classList.remove("on"); });
+  for (let L = 0; L < 7; L++) {
+    const x = s.L[L], sd = $("snd" + L);
+    const txt = sndName(L, x.j), from = x.from >= 0 && x.from !== s.style ? " · " + STY_CODE[x.from] : "";
+    if (sd.dataset.v !== txt + from) { sd.dataset.v = txt + from; sd.innerHTML = ""; sd.append(el("b", "", txt)); if (from) sd.append(el("span", "", from)); }
+    $("strip" + L).classList.toggle("focus", s.focus === L);
+    $("mute" + L).classList.toggle("on", !!x.mute); $("lock" + L).classList.toggle("on", !!x.lock);
+    setSlider("s" + L + "_0", x.vol); setSlider("s" + L + "_1", x.flt); setSlider("s" + L + "_2", x.space);
+  }
+  [s.mfilt, s.knob[0], s.space, s.knob[1], s.knob[2], s.knob[3]].forEach((v, i) => setSlider("knob" + i, v));
+  $("kLay").textContent = LAY[s.focus] + (s.live ? " · LIVE" : ""); $("kOct").textContent = (s.oct > 0 ? "+" : "") + s.oct;
+  $("arp").classList.toggle("on", s.larp);
+  if (s.msg && s.msg !== lastMsg) { const m = $("msg"); m.textContent = s.msg; m.style.display = "block"; clearTimeout(msgT); msgT = setTimeout(() => { m.style.display = "none"; }, 1600); }
+  lastMsg = s.msg;
+  $("nowCode").textContent = fullCode(s.style, s.seed, s.all);
+  if (s.fav !== seeds.mask) loadSeeds();
+  renderSlots(); markPlaying();
+}
+
+/* ---- SEEDS */
+async function loadSeeds() {
+  try {
+    const r = await request(SR.SEEDS); const l = []; let mask = 0;
+    for (let i = 0; i < 16; i++) { const set = r.b(), st = r.b(), seed = r.u32(); l.push({set: !!set, style: st & 7, all: !!(st & 8), seed}); if (set) mask |= 1 << i; }
+    seeds = l; seeds.mask = mask; renderSlots();
+  } catch (e) {}
+}
+function renderSlots() {
+  const box = $("slots");
+  if (box.children.length !== 16) {
+    box.innerHTML = "";
+    for (let i = 0; i < 16; i++) {
+      const d = el("div", "slot"); d.id = "slot" + i;
+      d.append(el("div", "n", "SAVE " + (i + 1)), el("div", "code"));
+      const bt = el("div", "btns");
+      const mk = (k, f) => { const b = el("button", "", t(k)); b.dataset.t = k; b.onclick = f; bt.appendChild(b); };
+      mk("playIt", () => act(SA.SEED_PLAY, i)); mk("keep", () => act(SA.SEED_KEEP, i).then(loadSeeds)); mk("clear", () => act(SA.SEED_CLEAR, i).then(loadSeeds));
+      mk("copy", () => { const s = seeds[i]; if (s && s.set) copyText(fullCode(s.style, s.seed, s.all)); });
+      d.appendChild(bt); box.appendChild(d);
+    }
+  }
+  for (let i = 0; i < 16; i++) {
+    const s = seeds[i], d = $("slot" + i);
+    d.querySelector(".code").textContent = s && s.set ? fullCode(s.style, s.seed, s.all) : "— " + t("empty") + " —";
+    d.classList.toggle("now", !!(s && s.set && state && s.seed === state.seed && s.style === state.style));
+  }
+}
+function copyText(x) { (navigator.clipboard ? navigator.clipboard.writeText(x) : Promise.reject()).then(() => flash(t("copied") + ": " + x)).catch(() => flash(x)); }
+function flash(x) { const m = $("msg"); m.textContent = x; m.style.display = "block"; clearTimeout(msgT); msgT = setTimeout(() => { m.style.display = "none"; }, 1800); }
+async function putSeeds(list) {
+  const a = [];
+  for (let i = 0; i < 16; i++) { const s = list[i]; a.push(s && s.set ? 1 : 0, s && s.set ? (s.style & 7) | (s.all ? 8 : 0) : 0, ...u32b(s && s.set ? s.seed : 0)); }
+  const r = await request(SR.SEEDS_PUT, a); const ok = r.b() === 1; await loadSeeds(); return ok;
+}
+async function importCodes(items, replace) {
+  const good = items.filter((x) => x), bad = items.length - good.length;
+  let list = replace ? [] : seeds.map((s) => ({...s}));
+  let n = 0;
+  if (replace) { good.slice(0, 16).forEach((x) => { list.push({...x, set: true}); n++; }); }
+  else for (const x of good) { const i = list.findIndex((s) => !s.set); if (i < 0) break; list[i] = {...x, set: true}; n++; }
+  while (list.length < 16) list.push({set: false});
+  if (!n && good.length) { $("impMsg").textContent = t("full"); return; }
+  await putSeeds(list);
+  $("impMsg").textContent = n + " " + t(replace ? "replaced" : "added") + (bad ? " · " + bad + " " + t("bad") : "");
+}
+
+/* ---- SOUNDS */
+let bS = 0, bL = 1, bMask = 0n, bFact = 0n, bUser = false;
+function buildSounds() {
+  const s = $("bStyles"); s.innerHTML = "";
+  STY.forEach((n, i) => { const b = el("button", "", n); b.onclick = () => { bS = i; loadBank(); }; s.appendChild(b); });
+  const l = $("bLayers"); l.innerHTML = "";
+  LAY.forEach((n, i) => { const b = el("button", "", n); b.style.color = "var(--l" + i + ")"; b.onclick = () => { bL = i; loadBank(); }; l.appendChild(b); });
+}
+async function loadBank() {
+  if (!info) return;
+  try { const r = await request(SR.BANK, [bS, bL]); r.b(); r.b(); r.b(); bUser = !!r.b(); bMask = r.u64(); bFact = r.u64(); } catch (e) { return; }
+  [...$("bStyles").children].forEach((b, i) => b.classList.toggle("on", i === bS));
+  [...$("bLayers").children].forEach((b, i) => b.classList.toggle("on", i === bL));
+  const box = $("bList"); box.innerHTML = "";
+  (names[bL] || []).forEach((n, j) => {
+    const it = el("div", "item"); it.dataset.j = j;
+    const c = el("input"); c.type = "checkbox"; c.checked = !!((bMask >> BigInt(j)) & 1n);
+    c.onchange = () => { bMask = c.checked ? bMask | (1n << BigInt(j)) : bMask & ~(1n << BigInt(j)); };
+    const tx = el("div", "t"); tx.append(n.eng ? n.eng + " · " + n.nm : n.nm);
+    const sm = el("small"); for (let s = 0; s < 8; s++) if (n.fact >> s & 1) sm.append(el("span", "tag" + (s === bS ? " mine" : ""), STY_CODE[s]));
+    tx.append(sm);
+    const li = el("button", "", t("listen")); li.dataset.t = "listen";
+    li.onclick = () => { if (state && !state.playing) flash(t("stoppedListen")); request(SR.AUDITION, [bL, j]).catch(() => {}); };
+    const us = el("button", "", t("use")); us.dataset.t = "use"; us.onclick = () => act(SA.SOUND, bL, j);
+    it.append(c, tx, li, us); box.appendChild(it);
+  });
+  markPlaying();
+}
+function markPlaying() { if (!state) return; const j = state.L[bL] && state.L[bL].j; [...$("bList").children].forEach((it) => it.classList.toggle("playing", Number(it.dataset.j) === j)); }
+async function saveBank() {
+  if (!bMask) { $("bMsg").textContent = t("oneAtLeast"); return; }
+  const r = await request(SR.BANK_PUT, [bS, bL, ...u64b(bMask)]);
+  $("bMsg").textContent = r.b() === 1 ? t("sent") : t("oneAtLeast");
+  loadBank();
+}
+
+/* ---- the page */
+function applyLang() {
+  document.documentElement.lang = lang; $("lang").textContent = lang === "en" ? "FR" : "EN";
+  document.querySelectorAll("[data-t]").forEach((e) => { if (T.en[e.dataset.t]) e.textContent = t(e.dataset.t); });
+  if ($("status").dataset.k) { const k = $("status").dataset.k; $("status").textContent = t(k) + (k === "connected" && info ? " · " + info.ver : ""); }
+  render(); renderSlots(); if (info) loadBank();
+}
+document.querySelectorAll("nav button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("on", x === b));
+  document.querySelectorAll("section.tab").forEach((s) => s.classList.toggle("show", s.id === "tab-" + b.dataset.tab));
+  if (b.dataset.tab === "sounds") loadBank();
+});
+$("conn").onclick = connect;
+$("lang").onclick = () => { lang = lang === "en" ? "fr" : "en"; try { localStorage.setItem("siren-studio-lang", lang); } catch (e) {} applyLang(); };
+$("play").onclick = () => act(SA.PLAY); $("rec").onclick = () => act(SA.REC);
+$("all").onclick = () => act(SA.ALL, 0, state && state.all ? 0 : 1); $("keep").onclick = () => act(SA.KEEPSTYLE);
+$("flat").onclick = () => act(SA.FLAT); $("give").onclick = () => act(SA.GIVEBACK);
+$("octd").onclick = () => act(SA.OCT, 0, -1); $("octu").onclick = () => act(SA.OCT, 0, 1); $("arp").onclick = () => act(SA.ARP);
+$("copyNow").onclick = () => state && copyText(fullCode(state.style, state.seed, state.all));
+$("addCodes").onclick = () => importCodes(parseCodes($("codes").value), false);
+$("repCodes").onclick = () => importCodes(parseCodes($("codes").value), true);
+$("file").onchange = async () => {
+  const f = $("file").files[0]; if (!f) return;
+  try {
+    const j = JSON.parse(await f.text()); const items = [];
+    for (const s of (j.seeds || [])) { const p = parseCodes(s.code || (STY_CODE[s.style] + " " + s.seed + (s.all ? " ALL" : "")))[0]; items.push(p || null); }
+    $("codes").value = items.filter((x) => x).map((x) => fullCode(x.style, x.seed, x.all)).join("\n");
+  } catch (e) { $("impMsg").textContent = t("bad"); }
+};
+$("export").onclick = () => {
+  const out = {format: "siren-seeds", version: 1, seeds: seeds.map((s, i) => s.set ? {slot: i + 1, code: fullCode(s.style, s.seed, s.all)} : null).filter((x) => x)};
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], {type: "application/json"}));
+  a.download = "siren-seeds.json"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+$("bAll").onclick = () => { bMask = (1n << BigInt((names[bL] || []).length)) - 1n; loadBankView(); };
+$("bNone").onclick = () => { bMask = bFact; loadBankView(); };
+function loadBankView() { [...$("bList").children].forEach((it) => { it.querySelector("input").checked = !!((bMask >> BigInt(Number(it.dataset.j))) & 1n); }); }
+$("bSave").onclick = saveBank;
+$("bReset").onclick = async () => { await request(SR.BANK_RESET, [bS, bL]); $("bMsg").textContent = t("reset"); loadBank(); };
+$("bResetAll").onclick = async () => { await request(SR.BANK_RESET, [127, 127]); $("bMsg").textContent = t("reset"); loadBank(); };
+buildLive(); buildSounds(); renderSlots(); applyLang();
+</script>
+</body>
+</html>

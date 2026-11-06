@@ -1016,11 +1016,12 @@ typedef struct {
  * 16 seeds kept on the SAVE page, its own magic and CRC (Clipper reads its tuning's magic there, finds SIREN's, keeps
  * its own tuning in RAM) */
 #if SIREN && !ABYSS
-#define SIREN_SIDE_MAGIC 0x314E5253u                 /* "SRN1" */
+#define SIREN_SIDE_MAGIC 0x324E5253u                 /* "SRN2" (0.10: each seed's style and ALL) */
 typedef struct {
     uint32_t magic;
     uint16_t set, rsv;                               /* set: bit k, seed k kept */
     uint32_t seed[16];
+    uint8_t st[16];                                  /* its style (bits 0-2), ALL SOUNDS (bit 3) */
     uint32_t crc;
 } siren_side_t;
 #endif
@@ -1052,7 +1053,7 @@ UI_SMALL static void side_fill(side2_t *s)                    /* what the side r
         uint32_t k;
         s->sr.magic = SIREN_SIDE_MAGIC;
         for (k = 0; k < 16u; k++)
-            if (su.fav_set[k]) { s->sr.set |= (uint16_t)(1u << k); s->sr.seed[k] = su.fav[k]; }
+            if (su.fav_set[k]) { s->sr.set |= (uint16_t)(1u << k); s->sr.seed[k] = su.fav[k]; s->sr.st[k] = su.fav_st[k]; }
         s->sr.crc = st_crc32(&s->sr, sizeof s->sr - 4u);
     }
 #elif CLIPPER_SYNTH
@@ -1083,6 +1084,7 @@ UI_SMALL static void side_take(const side2_t *s)              /* a side record r
         for (k = 0; k < 16u; k++) {
             su.fav_set[k] = (uint8_t)((s->sr.set >> k) & 1u);
             su.fav[k] = su.fav_set[k] ? s->sr.seed[k] : 0u;
+            su.fav_st[k] = su.fav_set[k] ? (uint8_t)(s->sr.st[k] & 15u) : 0u;
         }
     }
 #elif CLIPPER_SYNTH
@@ -1293,6 +1295,48 @@ UI_SMALL static void settings_save(void)
         persist_saved = p;
 #endif
 }
+#if SIREN && !ABYSS && FELUCCA_FLASH
+/* (0.10) the user's banks (siren.c srb_mask), in the free sector after USR4 (one copy: a write cut short leaves the
+ * factory's): each layer's masks with its universe's number, so another firmware's universe leaves that layer as the
+ * factory has it */
+#define SRB_MAGIC 0x31425253u                        /* "SRB1" */
+typedef struct {
+    uint32_t magic, size;
+    uint32_t sig[7];
+    uint64_t mask[SB_NSTYLES][7];
+    uint32_t crc;
+} srb_store_t;
+static srb_store_t srb_st __attribute__((section(".pool")));
+static void srb_boot(void)                          /* main.c, after siren_init */
+{
+    uint32_t s, L;
+    if (!flash_ok || st_read(FL_SIREN_LO, &srb_st, sizeof srb_st) || srb_st.magic != SRB_MAGIC ||
+        srb_st.size != sizeof srb_st || srb_st.crc != st_crc32(&srb_st, sizeof srb_st - 4u))
+        return;
+    for (L = 0; L < 7u; L++)
+        if (srb_st.sig[L] == srb_sig(L))
+            for (s = 0; s < SB_NSTYLES; s++) srb_mask[s][L] = srb_st.mask[s][L];
+    srb_rebuild();
+}
+static int srb_write(void)                          /* once stopped and quiet (siren_ui.c): 0 written, 1 no flash, -1 failed */
+{
+    uint32_t s, L;
+    if (!flash_ok)
+        return 1;
+    srb_st.magic = SRB_MAGIC; srb_st.size = sizeof srb_st;
+    for (L = 0; L < 7u; L++) {
+        srb_st.sig[L] = srb_sig(L);
+        for (s = 0; s < SB_NSTYLES; s++) srb_st.mask[s][L] = srb_mask[s][L];
+    }
+    srb_st.crc = st_crc32(&srb_st, sizeof srb_st - 4u);
+    if (st_erase(FL_SIREN_LO) || st_prog(FL_SIREN_LO, &srb_st, sizeof srb_st))
+        return -1;
+    return 0;
+}
+#elif SIREN && !ABYSS
+static void srb_boot(void) {}
+static int srb_write(void) { return 1; }
+#endif
 #if SIREN && !ABYSS
 static int siren_side_unsaved(void)                 /* (0.9.2) the kept seeds not yet as the flash has them: 1; -1 no flash */
 {

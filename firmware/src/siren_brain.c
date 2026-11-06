@@ -230,6 +230,7 @@ void sb_init(sb_brain_t *b, const sb_palette_t *pal)
     b->style = SB_TRANCE;
     b->knobs[K_ENERGY] = 500; b->knobs[K_DENSITY] = 500; b->knobs[K_TENSION] = 500; b->knobs[K_MUTATION] = 350;
     for (i = 0; i < SB_NLAYERS; i++) b->snd[i] = -1;
+    b->kit_force = -1;
     b->pal = pal;
     sb_new_track(b, 0x51A3u, SB_TRANCE, 0, 0, 0);
 }
@@ -248,10 +249,12 @@ static void sb_pick_sounds(sb_brain_t *b)
     }
     /* the drums: one of the style's own kits, its kick (and boom) tuned to the key */
     {
-        int nk = p->nkits[b->style], ki = nk ? (int)(b->kit_pick % (uint32_t)nk) : 0, w;
+        int nk = p->nkits[b->style], ki = nk ? (int)(b->kit_pick % (uint32_t)nk) : 0, w, kx;
+        if (b->locks[L_DRUMS] && b->kit_force >= 0 && p->nkall) { ki = b->kit_force % p->nkall; nk = p->nkall; }   /* (SIREN 0.10) */
+        kx = p->kit_at[b->style] ? p->kit_at[b->style][ki] : p->kit_first[b->style] + ki;
         b->snd[L_DRUMS] = (int16_t)ki;
         for (w = 0; w < 2; w++) {
-            int n16 = nk ? p->kick_n16[p->kit_first[b->style] + ki][w] : 0, best = n16;
+            int n16 = nk ? p->kick_n16[kx][w] : 0, best = n16;
             if (st->kit_tune && n16) {
                 int bd = 1 << 30, pcs[2], q, t;
                 pcs[0] = b->key; pcs[1] = b->key + 7;
@@ -656,5 +659,5 @@ void sb_remotif(sb_brain_t *b, int L, int delta)
     b->motif_ver[L] = (uint8_t)(b->motif_ver[L] + delta);
     b->motif_only = (uint8_t)(1u << L); sb_motifs(b); b->motif_only = 0;
 }
-void sb_lock(sb_brain_t *b, int L, int on) { b->locks[L] = (uint8_t)(on ? 1 : 0); }
+void sb_lock(sb_brain_t *b, int L, int on) { b->locks[L] = (uint8_t)(on ? 1 : 0); if (L == L_DRUMS && !on) b->kit_force = -1; }
 void sb_knob(sb_brain_t *b, int k, int v) { b->knobs[k] = (int16_t)sb_clamp(v, 0, 1000); if (k == K_DENSITY) sb_motifs(b); }

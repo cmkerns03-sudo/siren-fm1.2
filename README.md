@@ -3,11 +3,11 @@
 <p align="center"><b>A rave that writes itself: a firmware for the M-VAVE FM-1.</b><br>
 Free and open source (GPL-3.0). Built on <a href="https://github.com/isod89/clipper-fm1">Clipper</a> and <a href="https://github.com/isod89/sloop-fm1">SLOOP</a>, themselves based on <a href="https://github.com/hugelton/Felucca">Felucca</a> by Leo Kuroshita / Hügelton Instruments.</p>
 
-<p align="center"><b><a href="https://isod89.github.io/siren-fm1/webapp/installer/">Install it from the browser</a></b> · <a href="https://github.com/isod89/siren-fm1/releases">Releases</a> · <a href="#the-controls">The controls</a> · <a href="#building-it-yourself">Building</a> · <a href="LICENSING.md">Licensing</a></p>
+<p align="center"><b><a href="https://isod89.github.io/siren-fm1/webapp/installer/">Install it from the browser</a></b> · <a href="https://isod89.github.io/siren-fm1/webapp/studio/">SIREN STUDIO</a> · <a href="https://github.com/isod89/siren-fm1/releases">Releases</a> · <a href="#the-controls">The controls</a> · <a href="#building-it-yourself">Building</a> · <a href="LICENSING.md">Licensing</a></p>
 
 ---
 
-> **Status: 0.9.2, experimental.** SIREN passes its whole test suite on a computer and is being tested on the FM-1.
+> **Status: 0.10, experimental.** SIREN passes its whole test suite on a computer and is being tested on the FM-1.
 > If something crackles or sounds wrong, open an issue with the style and what the screen shows (the CPU % at the
 > bottom, ECO at the top). Install it at your own risk. You can go back to the official firmware (V16 or V15) from the
 > installer page, or to Clipper or SLOOP with their own installers.
@@ -31,7 +31,11 @@ keyboard to take any layer into your own hands.
 - **Pro risers**: five kinds (AIR RISE, UPLIFTER, SHIMMER UP, SAW SWEEP, WASH RISE) that open and climb to the drop,
   then fall away.
 - **Both cores of the FM-1**, the room reverb and the pad at half the rate: light enough to play a whole set.
-- **16 seeds** to keep the tracks you love, kept over a restart; a seed plays the same track again.
+- **16 seeds** to keep the tracks you love, kept over a restart; a seed plays the same track again, in its style.
+- **SIREN STUDIO** (0.10), in the browser: play it live with every control at once, share and import seeds as codes
+  (`PSY 11R-3N07`) or files, and choose which sounds each style may pick on each of its 7 layers (kept in the FM-1).
+- **Every drum kit everywhere** (0.10): PRESET on the drums goes through the 16 kits of all the styles, and ALL SOUNDS
+  picks drums from every style too.
 
 ## The controls
 
@@ -70,6 +74,23 @@ while they wait): BREAK, BUILD 4, BUILD 16, DROP, FILL, NEW MELODY, NEW BASS, NE
 | LFO | the mixer | 1-7 the layer, 9-15 its on / off, 16 every strip back to flat; the knobs VOLUME, FILTER, SPACE, VARIATION |
 | SAVE | 16 seeds | an empty key keeps the track playing; a kept one, tapped, plays it again; held, the one playing takes its place. They stay after a restart: written to the FM-1's memory when the music is stopped (KEPT: SAVED AT STOP, then SEEDS SAVED) |
 | GLO | the settings | K1 TENSION, K2 MUTATION, K3 INTENSITY, K4 MELODY; 1 keep the style, 2 a flat mix, 3 every layer given back; and a reminder of every button |
+
+## SIREN STUDIO
+
+[SIREN STUDIO](https://isod89.github.io/siren-fm1/webapp/studio/) talks to the FM-1 over the USB cable (Chrome or Edge,
+on a computer or an Android phone; WebMIDI with SysEx):
+
+- **LIVE**: PLAY, a new rave, the 8 styles, ALL SOUNDS, the 11 gestures of the track's form, the 16 DJ effects (hold a
+  pad), the 7 layers (sound, mute, keep, reroll, motif, volume, filter, space), the DJ knobs and the settings, and a
+  keyboard for the layer you choose. The FM-1 stays on its page.
+- **SEEDS**: the 16 SAVE slots (play, keep the track playing, clear, copy its code), the code of the track playing,
+  codes pasted to import (`PSY 11R-3N07`, `TECHNO 2FQ-9KD1 ALL`), a `.json` file to save or open. A seed plays its
+  track in its style; with other banks of sounds than yours, someone else hears other sounds on the same track.
+- **SOUNDS**: for each style and each of its 7 layers, tick the sounds it may pick among all of them (201 sounds, 16
+  drum kits, 5 risers), listen to one now, or put it on the layer. From the next track; the FM-1 keeps them once the
+  music is stopped. One button brings the factory's back.
+
+The protocol is in [firmware/src/editor_siren.c](firmware/src/editor_siren.c).
 
 ## Install
 

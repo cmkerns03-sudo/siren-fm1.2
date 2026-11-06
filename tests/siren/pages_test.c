@@ -38,6 +38,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 static uint32_t t_saves; static int t_unsaved;
 static void settings_save(void) { t_saves++; t_unsaved = 0; }
 static int siren_side_unsaved(void) { return t_unsaved; }
+static int srb_write(void) { return 1; }
 static int audio_quiet(void)
 {
     uint32_t p, i;

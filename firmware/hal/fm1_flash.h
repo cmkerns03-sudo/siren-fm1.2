@@ -50,9 +50,17 @@ static inline void *fl_far(void *p) { void *volatile q = p; return q; }
  * the 1 MiB part ignores the high address bits, so a wrapped range lands low. */
 #define FL_IN(off, n, lo, hi) ((uint32_t)(off) >= (lo) && (uint32_t)(off) <= (hi) && \
                                (uint32_t)(n) <= (hi) - (uint32_t)(off))
+/* (SIREN 0.10) SIREN's banks of sounds, the user's (project.c srb_store_t): the free sector after USR4, SIREN's only */
+#define FL_SIREN_LO     0x000FB000u
+#define FL_SIREN_HI     0x000FC000u
+#if defined(SIREN) && SIREN && !(defined(ABYSS) && ABYSS)
+#define FL_SIREN_OK(off, n) FL_IN(off, n, FL_SIREN_LO, FL_SIREN_HI)
+#else
+#define FL_SIREN_OK(off, n) 0
+#endif
 /* Felucca's own store (projects, user samples; settings; the FM6 bank) */
 #define FL_STORE_OK(off, n) (FL_IN(off, n, FL_DATA_LO, FL_DATA_HI) || FL_IN(off, n, FL_GLOB_LO, FL_GLOB_HI) || \
-                             FL_IN(off, n, FL_FM6_LO, FL_FM6_HI) || FL_IN(off, n, FL_USR4_LO, FL_USR4_HI))
+                             FL_IN(off, n, FL_FM6_LO, FL_FM6_HI) || FL_IN(off, n, FL_USR4_LO, FL_USR4_HI) || FL_SIREN_OK(off, n))
 /* Where the RAM driver may erase / program. The app build allows only its own
  * data regions; the update loader (firmware/loader) defines its own window. */
 #ifndef FL_RANGE_OK

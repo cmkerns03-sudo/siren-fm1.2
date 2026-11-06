@@ -746,6 +746,9 @@ UI_SMALL static int ed_backup(uint32_t cmd, const uint8_t *a, uint32_t na)   /* 
 #if CLIPPER_SYNTH
 #include "editor_fmx.c"                               /* v12 (Clipper 0.6): the FMX patches (90..92) */
 #endif
+#if SIREN && !ABYSS
+#include "editor_siren.c"                             /* (SIREN 0.10) SIREN STUDIO: live, seeds, banks (100..109) */
+#endif
 
 UI_SMALL static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0 and F7 */
 {
@@ -755,6 +758,12 @@ UI_SMALL static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes b
     int16_t *vp;
     const param_desc_t *d;
     ed_begin(cmd);
+#if SIREN && !ABYSS
+    if (ed_siren_handle(cmd, a, na)) {                     /* (SIREN 0.10) SIREN STUDIO */
+        ed_send();
+        return;
+    }
+#endif
     if (ed_backup(cmd, a, na)) {                           /* v6: backup / restore */
         ed_send();
         return;

@@ -103,7 +103,8 @@ static struct {
 enum { SC_PLAY, SC_STOP, SC_KNOB, SC_DIVE, SC_BREAK, SC_STYLE, SC_SEED, SC_REROLL, SC_LOCK, SC_STYLELOCK, SC_PUNCH, SC_STYLEQ,
        SC_DROP, SC_FILL, SC_REMOTIF, SC_KEYUP, SC_NEXT, SC_STAY, SC_SOUND, SC_MIX,     /* (0.5) the black keys, the mixer */
        SC_LIVE, SC_LIVEOFF, SC_LARP,      /* (0.8) the keyboard: a key (its notes), the layers given back, the arpeggiator */
-       SC_ALLBANK };                      /* (0.9) ALL: the brain picks from every style's sounds (a 1, 0 the style's) */
+       SC_ALLBANK,                        /* (0.9) ALL: the brain picks from every style's sounds (a 1, 0 the style's) */
+       SC_SOUNDSET };                     /* (0.10) the web: layer a's sound b of its list, kept */
 enum { SM_FILT, SM_SPACE, SM_FOCUS, SM_LVOL = 10, SM_LFLT = 20, SM_LSPACE = 30 };  /* SC_MIX's targets (+ the layer) */
 
 /* the main loop's way into the brain */
@@ -282,87 +283,170 @@ static void siren_px_block(uint32_t adv)
 static int32_t siren_bend(void) { return sr.bend; }                /* (voice.c: 1/4096 semitone on every part) */
 static int32_t siren_eq_db(uint32_t band) { return sr.eqk[band % 3u]; }   /* (bus.c) */
 
-/* ---- (0.9) every style's sounds for a layer, as one list: the style's own first (as before), then the others' (each
- * sound once, in the styles' order): k -> its place in SD_LIST (siren_data.h; its calibration there: SD_TRIM, SD_TONE,
- * a sound's the same in any style's list, levels.json is per layer). The FX layer: the riser's kinds (RS_*) */
-static int siren_in_span(const sd_span_t *sp, uint16_t snd)
+/* ---- (0.10) the banks. For each layer its universe: every sound any style's factory bank has (as SD_LIST places; the
+ * drums: the kits; the FX layer: the riser's kinds). For each style and layer, the sounds it may pick: a 64-bit mask
+ * over the universe, the factory's or the user's (the web editor's SIREN STUDIO; kept in flash, project.c). The list a
+ * style picks from: its own bank first (in the factory's order while it is the factory's: the seeds of 0.9 keep their
+ * sounds), then the other styles' (each sound once, in the styles' order): the brain's index k is a place in it, the
+ * style's own while k < its own count (ALL off), any of it with ALL; PRESET goes through all of it. Built in the main
+ * loop (srb_rebuild): the brain only reads the counts (bytes) and the drums' list (any value in it is a kit) */
+#define SRB_MAX 64u
+#define SRB_BIT(j) ((uint64_t)1 << (j))
+static uint16_t srb_uni[7][SRB_MAX] __attribute__((section(".pool")));
+static uint8_t srb_nuni[7];
+static uint64_t srb_mask[SB_NSTYLES][7] __attribute__((section(".pool")));
+static uint64_t srb_fact[SB_NSTYLES][7] __attribute__((section(".pool")));
+static uint8_t srb_fo[SB_NSTYLES][7][SRB_MAX] __attribute__((section(".pool")));    /* the factory's order */
+static uint8_t srb_fn[SB_NSTYLES][7];
+static uint8_t srb_list[SB_NSTYLES][7][SRB_MAX] __attribute__((section(".pool")));
+static uint8_t srb_own[SB_NSTYLES][7], srb_all[7];
+static uint8_t srb_dirty;                            /* the user's banks changed: to flash once stopped (siren_ui.c) */
+static void srb_universe(void)
 {
-    uint32_t i;
-    for (i = 0; i < sp->n; i++)
-        if (SD_LIST[sp->first + i] == snd) return 1;
-    return 0;
-}
-static int32_t siren_ext_at(uint32_t style, uint32_t L, uint32_t k, int8_t *from)
-{
-    const sd_span_t *own = &SD_CUR[style % SB_NSTYLES][L];
-    uint32_t s, i, j;
-    if (k < own->n) { *from = (int8_t)style; return (int32_t)(own->first + k); }
-    k -= own->n;
+    uint32_t s, L, i, j;
+    for (L = 0; L < 7u; L++) {
+        srb_nuni[L] = 0;
+        for (s = 0; s < SB_NSTYLES; s++) { srb_fn[s][L] = 0; srb_fact[s][L] = 0; }
+    }
+    for (j = 0; j < SD_NKITS && j < SRB_MAX; j++) srb_uni[L_DRUMS][j] = (uint16_t)j;
+    srb_nuni[L_DRUMS] = (uint8_t)j;
+    for (j = 0; j < RS_N; j++) srb_uni[L_FX][j] = (uint16_t)j;
+    srb_nuni[L_FX] = RS_N;
     for (s = 0; s < SB_NSTYLES; s++) {
-        const sd_span_t *sp = &SD_CUR[s][L];
-        if (s == style % SB_NSTYLES) continue;
-        for (i = 0; i < sp->n; i++) {
-            uint16_t snd = SD_LIST[sp->first + i];
-            int seen = siren_in_span(own, snd);
-            for (j = 0; j < s && !seen; j++)        /* (once: not if an earlier style had it) */
-                if (j != style % SB_NSTYLES && siren_in_span(&SD_CUR[j][L], snd)) seen = 1;
-            if (seen) continue;
-            if (!k--) { *from = (int8_t)s; return (int32_t)(sp->first + i); }
+        for (i = 0; i < SD_KIT_N[s]; i++) {
+            j = SD_KIT_FIRST[s] + i;
+            if (j < srb_nuni[L_DRUMS]) { srb_fo[s][L_DRUMS][srb_fn[s][L_DRUMS]++] = (uint8_t)j; srb_fact[s][L_DRUMS] |= SRB_BIT(j); }
+        }
+        for (i = 0; i < 3u; i++) {
+            j = RS_STYLE[s][i];
+            srb_fo[s][L_FX][srb_fn[s][L_FX]++] = (uint8_t)j; srb_fact[s][L_FX] |= SRB_BIT(j);
+        }
+        for (L = L_BASS; L < L_FX; L++) {
+            const sd_span_t *sp = &SD_CUR[s][L];
+            for (i = 0; i < sp->n; i++) {
+                uint16_t id = SD_LIST[sp->first + i];
+                for (j = 0; j < srb_nuni[L] && SD_LIST[srb_uni[L][j]] != id; j++) {}
+                if (j == srb_nuni[L]) {
+                    if (j >= SRB_MAX) continue;                  /* (gen_siren.py keeps every layer under 64) */
+                    srb_uni[L][j] = (uint16_t)(sp->first + i); srb_nuni[L]++;
+                }
+                if (!(srb_fact[s][L] & SRB_BIT(j))) { srb_fo[s][L][srb_fn[s][L]++] = (uint8_t)j; srb_fact[s][L] |= SRB_BIT(j); }
+            }
         }
     }
-    *from = (int8_t)style;
-    return own->n ? (int32_t)own->first : -1;
+    for (s = 0; s < SB_NSTYLES; s++)
+        for (L = 0; L < 7u; L++) srb_mask[s][L] = srb_fact[s][L];
 }
-static uint32_t siren_count_all(uint32_t L)
+static void srb_add(uint8_t *o, uint32_t *n, uint64_t *seen, uint32_t s, uint32_t L, int factory_order)
 {
-    uint32_t s, i, j, k = 0;
-    for (s = 0; s < SB_NSTYLES; s++) {
-        const sd_span_t *sp = &SD_CUR[s][L];
-        for (i = 0; i < sp->n; i++) {
-            int seen = 0;
-            for (j = 0; j < s && !seen; j++) seen = siren_in_span(&SD_CUR[j][L], SD_LIST[sp->first + i]);
-            k += !seen;
+    uint64_t m = srb_mask[s][L];
+    uint32_t i, j;
+    if (factory_order && m == srb_fact[s][L]) {
+        for (i = 0; i < srb_fn[s][L]; i++) {
+            j = srb_fo[s][L][i];
+            if (!(*seen & SRB_BIT(j))) { o[(*n)++] = (uint8_t)j; *seen |= SRB_BIT(j); }
         }
+        return;
     }
-    return k;
+    for (j = 0; j < srb_nuni[L]; j++)
+        if ((m & SRB_BIT(j)) && !(*seen & SRB_BIT(j))) { o[(*n)++] = (uint8_t)j; *seen |= SRB_BIT(j); }
 }
-/* the riser's kinds the same way: the style's three, then the others */
-static uint32_t siren_rs_kind(uint32_t style, uint32_t k)
-{
-    const uint8_t *own = RS_STYLE[style % SB_NSTYLES];
-    uint32_t q;
-    if (k < 3u) return own[k];
-    k -= 3u;
-    for (q = 0; q < RS_N; q++)
-        if (q != own[0] && q != own[1] && q != own[2] && !k--) return q;
-    return own[0];
-}
-static void siren_palette(void)                      /* the brain's choice: the style's sounds, or all (ALL) */
+static void srb_counts(void)                         /* what the brain may pick: the style's own, or all (ALL) */
 {
     uint32_t s, L;
+    for (s = 0; s < SB_NSTYLES; s++) {
+        for (L = L_BASS; L <= L_FX; L++)
+            sb_pal.ncur[s][L] = sr.allbank ? srb_all[L] : srb_own[s][L];
+        sb_pal.ncur[s][L_DRUMS] = 0;
+        sb_pal.nkits[s] = sr.allbank ? srb_all[L_DRUMS] : srb_own[s][L_DRUMS];
+        sb_pal.kit_at[s] = srb_list[s][L_DRUMS];
+    }
+    sb_pal.nkall = srb_all[L_DRUMS];
+    for (L = 0; L < 7u; L++) sr.nall[L] = srb_all[L];
+}
+static void srb_rebuild(void)
+{
+    uint32_t s, s2, L, n;
+    uint64_t seen;
+    for (L = 0; L < 7u; L++)
+        for (s = 0; s < SB_NSTYLES; s++) {
+            if (!(srb_mask[s][L] & ((srb_nuni[L] >= 64u ? ~(uint64_t)0 : SRB_BIT(srb_nuni[L]) - 1u))))
+                srb_mask[s][L] = srb_fact[s][L];                 /* (never empty: the factory's) */
+            n = 0; seen = 0;
+            srb_add(srb_list[s][L], &n, &seen, s, L, 1);
+            srb_own[s][L] = (uint8_t)n;
+            for (s2 = 0; s2 < SB_NSTYLES; s2++)                    /* (the FX layer: the others in the kinds' order, as 0.9) */
+                if (s2 != s) srb_add(srb_list[s][L], &n, &seen, s2, L, L != L_FX);
+            srb_all[L] = (uint8_t)n;
+        }
+    srb_counts();
+}
+static int8_t srb_from(uint32_t style, uint32_t L, uint32_t k)   /* the bank a sound of the list comes from */
+{
+    uint32_t s, j;
+    if (k < srb_own[style % SB_NSTYLES][L]) return (int8_t)style;
+    j = srb_list[style % SB_NSTYLES][L][k];
     for (s = 0; s < SB_NSTYLES; s++)
-        for (L = 0; L < SB_NLAYERS; L++)
-            sb_pal.ncur[s][L] = L == L_FX ? (sr.allbank ? RS_N : 3) :
-                                L >= L_BASS && L < L_FX ? (sr.allbank ? sr.nall[L] : SD_CUR[s][L].n) : 0;
+        if (srb_mask[s][L] & SRB_BIT(j)) return (int8_t)s;
+    return (int8_t)style;
+}
+/* (0.10) a layer's universe as a number (its names): a bank kept in flash is taken back only for the same universe */
+static uint32_t srb_hash(uint32_t h, const char *t) { while (*t) h = (h ^ (uint8_t)*t++) * 16777619u; return (h ^ 0xFFu) * 16777619u; }
+static const char *srb_name(uint32_t L, uint32_t j, const char **eng)   /* universe j's names: the engine (or 0), the sound */
+{
+    *eng = 0;
+    if (L == L_DRUMS) return SD_KITS[srb_uni[L][j]].name;
+    if (L == L_FX) return RS_NAME[srb_uni[L][j] % RS_N];
+    { const sd_snd_t *x = &SD_SND[SD_LIST[srb_uni[L][j]]]; *eng = x->eng; return x->pre; }
+}
+static uint32_t srb_sig(uint32_t L)
+{
+    uint32_t h = 2166136261u ^ L, j;
+    for (j = 0; j < srb_nuni[L]; j++) {
+        const char *e, *n = srb_name(L, j, &e);
+        char nb[9]; uint32_t i;
+        if (L == L_DRUMS) { for (i = 0; i < 8u && n[i]; i++) nb[i] = n[i]; nb[i] = 0; n = nb; }   /* (8 chars, maybe no 0) */
+        if (e) h = srb_hash(h, e);
+        h = srb_hash(h, n);
+    }
+    return h;
+}
+/* (0.9's way in, kept for the tests) k -> its place in SD_LIST, the bank it comes from */
+static int32_t siren_ext_at(uint32_t style, uint32_t L, uint32_t k, int8_t *from)
+{
+    uint32_t n = srb_all[L];
+    if (!n) { *from = (int8_t)style; return -1; }
+    k %= n;
+    *from = srb_from(style, L, k);
+    return srb_uni[L][srb_list[style % SB_NSTYLES][L][k]];
 }
 /* (0.5) PRESETS turned on a layer: the next or previous sound of the style's selection for it (a kit for the drums),
  * kept from then on (the layer locked: the brain's next tracks leave it) */
 static void siren_sound_step(int32_t L, int32_t d)
 {
-    const sb_palette_t *p = sb.pal;
     int32_t n;
-    if (L < 0 || L > L_FX || !p)
+    if (L < 0 || L > L_FX || !sb.pal)
         return;
-    if (L == L_DRUMS) {
-        n = p->nkits[sb.style];
-        if (n) { sb.kit_pick = (uint32_t)((sb.snd[L_DRUMS] + d % n + n) % n); sb_pick_sounds(&sb); }
-        return;
-    }
-    n = L == L_FX ? RS_N : sr.nall[L];               /* (0.9) every style's sounds for it, the style's own first */
+    n = srb_all[L];                                  /* (0.9) every style's sounds for it, the style's own first; (0.10)
+                                                      * the drums too: every kit */
     if (n < 1)
         return;
+    if (L == L_DRUMS) {
+        sb.kit_force = (int16_t)((sb.snd[L_DRUMS] + d % n + n) % n);
+        sb.locks[L_DRUMS] = 1; sb_pick_sounds(&sb);
+        return;
+    }
     sb.snd[L] = (int16_t)((sb.snd[L] + d % n + n) % n);
     sb.locks[L] = 1; sb.sounds_changed = 1;
+}
+static void siren_sound_set(int32_t L, int32_t k)    /* (0.10) the web: this sound of the list, kept */
+{
+    int32_t n;
+    if (L < 0 || L > L_FX || !sb.pal || (n = srb_all[L]) < 1)
+        return;
+    k = ((k % n) + n) % n;
+    if (L == L_DRUMS) { sb.kit_force = (int16_t)k; sb.locks[L_DRUMS] = 1; sb_pick_sounds(&sb); return; }
+    sb.snd[L] = (int16_t)k; sb.locks[L] = 1; sb.sounds_changed = 1;
 }
 static void siren_mix_set(int32_t what, int32_t v)
 {
@@ -464,7 +548,8 @@ static void siren_commands(void)                 /* (audio interrupt) */
         case SC_LIVE: siren_live((uint32_t)a, (uint32_t)b, sr.cmd[i].c); break;
         case SC_LIVEOFF: siren_live_off((uint32_t)a); break;
         case SC_LARP: siren_larp((uint32_t)a); break;
-        case SC_ALLBANK: sr.allbank = (uint8_t)(a != 0); siren_palette(); break;   /* (the next pick, the next track's) */
+        case SC_ALLBANK: sr.allbank = (uint8_t)(a != 0); srb_counts(); break;   /* (the next pick, the next track's) */
+        case SC_SOUNDSET: siren_sound_set(a, b); break;
         }
         sr.cr++;
     }
@@ -931,20 +1016,17 @@ static int16_t siren_find(const sd_snd_t *s, int16_t *pe)
     return -1;
 }
 static void siren_load_sound(track_t *t, uint32_t e, uint32_t p);   /* (ui.c set_engine_of + apply_preset_to; host: tests) */
-static void siren_apply_kit(void)
+static void siren_kit_put(const sd_kit_t *K, int tuned)   /* a kit into SYN 1: its kick tuned to the key (the brain's) */
 {
-    const sd_kit_t *K;
     dsu_kit_t *u;
-    int ki = sb.snd[L_DRUMS];
-    if (ki < 0 || !SD_KIT_N[sb.style])
-        return;
-    K = &SD_KITS[SD_KIT_FIRST[sb.style] + ki % SD_KIT_N[sb.style]];
     (void)dsu_kit(0);                            /* (the bank set up) */
     u = &dsu.k[0];
     fm1_irq_off();
     memcpy(u->s, K->s, sizeof u->s);
-    u->s[0].pitch = (uint8_t)(sb.kick_n16 >> 4); u->s[0].fine = (uint8_t)(sb.kick_n16 & 15u);
-    u->s[14].pitch = (uint8_t)(sb.kick2_n16 >> 4); u->s[14].fine = (uint8_t)(sb.kick2_n16 & 15u);
+    if (tuned) {
+        u->s[0].pitch = (uint8_t)(sb.kick_n16 >> 4); u->s[0].fine = (uint8_t)(sb.kick_n16 & 15u);
+        u->s[14].pitch = (uint8_t)(sb.kick2_n16 >> 4); u->s[14].fine = (uint8_t)(sb.kick2_n16 & 15u);
+    }
     u->crush = K->crush;
     memcpy(u->name, K->name, 8);
     fm1_irq_on();
@@ -952,6 +1034,15 @@ static void siren_apply_kit(void)
     song.g[G_DRLVL] = (int16_t)SIREN_DMIX[sb.style][0];
     song.g[G_DRREV] = (int16_t)SIREN_DMIX[sb.style][1];
     song.g[G_DRDLY] = (int16_t)SIREN_DMIX[sb.style][2];   /* (0.2: the drums' echo send; SIREN's master has no COMP) */
+}
+static void siren_apply_kit(void)
+{
+    int ki = sb.snd[L_DRUMS];
+    if (ki < 0 || !srb_all[L_DRUMS])
+        return;
+    ki %= srb_all[L_DRUMS];                      /* (0.10: a kit of any style's) */
+    sr.sound_from[L_DRUMS] = srb_from(sb.style, L_DRUMS, (uint32_t)ki);
+    siren_kit_put(&SD_KITS[srb_list[sb.style % SB_NSTYLES][L_DRUMS][ki]], 1);
 }
 static void siren_service(void)
 {
@@ -964,12 +1055,12 @@ static void siren_service(void)
         if (want < 0 || (want == sr.applied[L] && style == sr.applied_style[L]))
             continue;
         if (L == L_FX) {                             /* (0.9) the riser: a kind, no voice to load */
-            sr.rs_kind = (uint8_t)siren_rs_kind((uint32_t)style, (uint32_t)want % RS_N);
+            sr.rs_kind = (uint8_t)srb_list[style % SB_NSTYLES][L_FX][(uint32_t)want % (srb_all[L_FX] ? srb_all[L_FX] : 1u)];
             sr.applied[L] = want; sr.applied_style[L] = (int16_t)style;
             sr.sound_eng[L] = -1; sr.sound_from[L] = (int8_t)style;
             continue;
         }
-        at0 = siren_ext_at((uint32_t)style, L, (uint32_t)want % (sr.nall[L] ? sr.nall[L] : 1u), &from);
+        at0 = siren_ext_at((uint32_t)style, L, (uint32_t)want, &from);
         if (at0 < 0)
             continue;
         {
@@ -997,15 +1088,42 @@ static void siren_service(void)
     }
 }
 
+/* (0.10) SIREN STUDIO's audition: universe sound j on layer L now; the brain's own back at its next pick */
+static int siren_audition(uint32_t L, uint32_t j)
+{
+    uint32_t s;
+    if (L >= 7u || j >= srb_nuni[L])
+        return 0;
+    for (s = 0; s < SB_NSTYLES && !(srb_fact[s][L] & SRB_BIT(j)); s++) {}
+    sr.sound_from[L] = (int8_t)(s < SB_NSTYLES ? s : sb.style);
+    if (L == L_FX) { sr.rs_kind = (uint8_t)srb_uni[L_FX][j]; return 1; }
+    if (L == L_DRUMS) { siren_kit_put(&SD_KITS[srb_uni[L_DRUMS][j]], 0); return 1; }
+    {
+        uint32_t at = srb_uni[L][j];
+        int16_t pe, e = siren_find(&SD_SND[SD_LIST[at]], &pe);
+        track_t *t = SIREN_PART(L);
+        if (e < 0)
+            return 0;
+#ifdef SD_HAS_TRIM
+        sr.trim[L] = SD_TRIM[at]; sr.tone[L] = SD_TONE[at];
+#endif
+        siren_load_sound(t, (uint32_t)e, (uint32_t)pe);
+        t->p[P_LEVEL] = siren_level(L); t->p[P_PAN] = SIREN_MIX[L - 1][1];
+        t->p[P_DLY] = SIREN_MIX[L - 1][2]; t->p[P_REV] = SIREN_MIX[L - 1][3]; t->p[P_CHOR] = 0;
+        t->p[P_AMODE] = 0;
+        sr.sound_eng[L] = e; sr.sound_pre[L] = pe;
+    }
+    return 1;
+}
+
 static void siren_init(void)
 {
     uint32_t s, L, i;
     for (L = L_BASS; L < L_FX; L++)
-        sr.nall[L] = (uint8_t)siren_count_all(L);  /* (0.9) every style's sounds for the layer */
-    sr.nall[L_FX] = RS_N;
-    siren_palette();
+        sr.nall[L] = 0;
+    srb_universe();                                  /* (0.10) the banks: the factory's (the user's: srb_boot, project.c) */
+    srb_rebuild();
     for (s = 0; s < SB_NSTYLES; s++) {
-        sb_pal.nkits[s] = SD_KIT_N[s];
         sb_pal.kit_first[s] = SD_KIT_FIRST[s];
     }
     sb_pal.kick_n16 = SD_KICK_N16;

@@ -170,6 +170,13 @@ run "SIREN 0.3: the deck screen drawn through a set (only what changes sent; san
 $SIR -DNVOICE=8 -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -o "$OUT/siren_pages" tests/siren/pages_test.c -lm -lpthread
 mkdir -p build/siren_pages
 run "SIREN 0.8: the pages (no button to hold) and the keyboard in the hands (the layer taken, given back; chords, octave, arpeggiator; sanitizers)" "$OUT/siren_pages" build/siren_pages
+$SIR -DNVOICE=8 -O1 -g -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -o "$OUT/siren_studio" tests/siren/studio_test.c -lm -lpthread
+run "SIREN 0.10: SIREN STUDIO's SysEx (live gestures, seeds in their style, the banks, every kit with ALL and PRESET, an audition; sanitizers)" "$OUT/siren_studio"
+if python3 -c "import playwright" 2>/dev/null; then
+    $SIR -DNVOICE=8 -o "$OUT/siren_studio_o2" tests/siren/studio_test.c -lm -lpthread
+    mkdir -p build/siren_studio
+    run "SIREN 0.10: SIREN STUDIO in a browser against the firmware (connect, live, seeds, sounds)" python3 tests/siren/studio_e2e.py "$OUT/siren_studio_o2" build/siren_studio
+fi
 # ABYSS (SIREN=1 ABYSS=1, 12 voices): the brain alone (every world, its plans and notes), every world through the firmware's
 # audio path (sanitizers), each sound at its layer's loudness, the pages and the hands
 ABY="$CCS -O2 -w -DSIREN=1 -DABYSS=1 -DNVOICE=12 -I. -Ibuild/gen -Ifirmware/src -Ifirmware/hal"

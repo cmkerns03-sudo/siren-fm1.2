@@ -223,6 +223,9 @@ static void fm1_main(void)
     felucca_init();
 #if SIREN
     siren_init();                                       /* SIREN: its parts, its brain (siren.c) */
+#if !ABYSS
+    srb_boot();                                         /* (0.10) the user's banks of sounds (project.c) */
+#endif
     siren_ui_init();
 #endif
     cpu1_boot();                                        /* (0.7) the second core: at power-on, before the audio and the

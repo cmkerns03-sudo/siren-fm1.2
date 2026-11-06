@@ -25,6 +25,10 @@ typedef struct {
     uint8_t nkits[SB_NSTYLES];
     const uint16_t (*kick_n16)[2];    /* [kit of the style in order: style's first kit index + k] */
     uint8_t kit_first[SB_NSTYLES];
+    /* (SIREN 0.10) each style's kits as the firmware lists them (its own first, then any style's: the kit's index in
+     * kick_n16), 0: the style's own, from kit_first; nkall: how many in that list */
+    const uint8_t *kit_at[SB_NSTYLES];
+    uint8_t nkall;
 } sb_palette_t;
 
 typedef struct {
@@ -52,6 +56,7 @@ typedef struct {
     /* the track */
     uint8_t scale, key, bpm, bpm_target; const uint8_t *prog; uint8_t nprog, chord_bars;
     uint32_t kit_pick; uint8_t swing, bass_kind;
+    int16_t kit_force;                /* (SIREN 0.10) the kit PRESET chose (its place in kit_at), while the drums are kept */
     uint8_t plan_sec[SB_PLAN_MAX]; uint16_t plan_len[SB_PLAN_MAX]; uint8_t plan_n, plan_at; uint16_t sec_bar;
     uint8_t intro_kind;               /* (0.6) how the track begins (siren_brain.c IK_*) */
     uint8_t layer_on[6];              /* arp hook pad stab fx piano */

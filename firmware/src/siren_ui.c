@@ -14,13 +14,15 @@
  *                    7 ECHO OUT, 8 WASH OUT, 9-11 KILL LOW MID HIGH, 12 GATE, 13-16 the style's own (siren.c SIREN_PX)
  *   SEL              the style: white keys 1-8 TECHNO TRANCE PSY ACID RAVE HARD DRUM&BASS HOUSE (playing: on the next
  *                    8-bar phrase; the same key again: at once); 9 ALL SOUNDS (0.9: the next tracks' sounds from every
- *                    style's bank, not the style's own; PRESET always goes through all of them); 16 keep this style
+ *                    style's bank, not the style's own; PRESET always goes through all of them; 0.10: the drums too,
+ *                    every style's kits); 16 keep this style
  *   ENV              the track's form: white keys 1-11 BREAK, BUILD 4, BUILD 16, DROP, FILL, NEW MELODY, NEW BASS,
  *                    NEW GROOVE, KEY UP, NEXT TRACK, STAY (as the black keys, outside the deck)
  *   LFO              the layers' mix: white keys 1-7 the layer, 9-15 its on / off, 16 the strips back to flat; the
  *                    knobs its VOLUME, FILTER, SPACE, VARIATION
  *   SAVE             16 seeds: an empty key keeps the one playing; a kept one, tapped, plays it again; held, the one
- *                    playing takes its place (0.9.2: kept over a restart, written once the music is stopped)
+ *                    playing takes its place (0.9.2: kept over a restart, written once the music is stopped; 0.10: with
+ *                    its style and ALL, played in them)
  *   GLO              the settings: K1 TENSION, K2 MUTATION, K3 INTENSITY, K4 MELODY; keys 1 keep the style, 2 the
  *                    strips back to flat, 3 every layer given back to SIREN; the buttons, what they do
  *   everywhere       PLAY start / stop; REC a new rave (a new seed); the knobs a DJ's (K1 FILTER, K2 INTENSITY,
@@ -47,22 +49,43 @@ static void su_message(const char *m) { uint32_t i; for (i = 0; i < 19u && m[i];
 static int siren_side_unsaved(void);                /* project.c */
 static int audio_quiet(void);                       /* project.c */
 static void settings_save(void);                    /* project.c */
+static void su_fav_take(uint32_t k)                 /* (0.10) the track playing into slot k: its seed, its style, ALL */
+{
+    su.fav[k] = sb.seed; su.fav_set[k] = 1; su.fav_st[k] = (uint8_t)((sb.style & 7u) | (sr.allbank ? 8u : 0u));
+}
+static void su_fav_play(uint32_t k)                 /* (0.10) slot k's track: in its style, with its ALL */
+{
+    uint32_t st = su.fav_st[k] & 7u;
+    if (((su.fav_st[k] >> 3) & 1u) != sr.allbank) siren_cmd(SC_ALLBANK, (su.fav_st[k] >> 3) & 1u, 0, 0);
+    su.style = (uint8_t)st;
+    siren_cmd(SC_SEED, (int32_t)st, 0, su.fav[k]);
+    su_message("SEED PLAYS");
+}
 static void su_fav_kept(void)
 {
     su.fav_dirty = 1;
     su_message(sr.playing ? "KEPT: SAVED AT STOP" : "SEED KEPT");
 }
-static void su_fav_flush(void)
+static int srb_write(void);                         /* project.c (0.10): the user's banks of sounds */
+static void su_fav_flush(void)                      /* (0.10: the banks too) */
 {
-    if (!su.fav_dirty || sr.playing || transport_req || !audio_quiet() || fm1_ms - su.fav_t < 1500u)
+    if ((!su.fav_dirty && !srb_dirty) || sr.playing || transport_req || !audio_quiet() || fm1_ms - su.fav_t < 1500u)
         return;
     su.fav_t = fm1_ms;                                  /* (a failed write: again in 1.5 s) */
-    settings_save();
-    {
-        int u = siren_side_unsaved();                   /* (-1: no flash on this FM-1: RAM only, as before) */
+    if (srb_dirty) {
+        int r = srb_write();
+        if (r >= 0) srb_dirty = 0;
+        if (r == 0 && !su.fav_dirty) su_message("SOUNDS SAVED");
+    }
+    if (su.fav_dirty) {
+        int u;
+        settings_save();
+        u = siren_side_unsaved();                       /* (-1: no flash on this FM-1: RAM only, as before) */
         su.fav_dirty = (uint8_t)(u == 1);
         if (u == 0)
             su_message("SEEDS SAVED");
+        else if (u < 0)
+            su.fav_dirty = 0;
     }
 }
 static uint32_t su_seed_new(void)
@@ -215,7 +238,7 @@ static void su_page(uint32_t p)
 
 static void siren_input(void)
 {
-    uint32_t pressed = fm1_input_edges(0), notes = fm1_input_note_edges(), held = fm1_in.notes, k, b;
+    uint32_t pressed = fm1_input_edges(0), notes = fm1_input_note_edges(), held = fm1_in.notes | su.vheld, k, b;   /* (0.10: and the web's) */
     int32_t d;
     uint32_t page = su.info;
     /* the keys let go: the deck's notes end; the effect held ends; a seed key let go (SAVE) */
@@ -228,9 +251,9 @@ static void siren_input(void)
     if (su.slot_k >= 0) {
         uint32_t s = (uint32_t)su.slot_k, down = (held >> SU_WHITE[s]) & 1u;
         if (down && !su.slot_done && fm1_ms - su.slot_t0 >= 700u) {          /* held: the seed playing takes its place */
-            su.fav[s] = sb.seed; su.fav_set[s] = 1; su.slot_done = 1; su_fav_kept();
+            su_fav_take(s); su.slot_done = 1; su_fav_kept();
         } else if (!down) {                                                  /* tapped: it plays */
-            if (!su.slot_done) { siren_cmd(SC_SEED, -1, 0, su.fav[s]); su_message("SEED PLAYS"); }
+            if (!su.slot_done) su_fav_play(s);
             su.slot_k = -1;
         }
     }
@@ -313,7 +336,7 @@ static void siren_input(void)
             } else if (k == 15u) su_flat();
             break;
         case SP_SAVE:
-            if (!su.fav_set[k]) { su.fav[k] = sb.seed; su.fav_set[k] = 1; su_fav_kept(); }
+            if (!su.fav_set[k]) { su_fav_take(k); su_fav_kept(); }
             else { su.slot_k = (int8_t)k; su.slot_t0 = fm1_ms; su.slot_done = 0; }
             break;
         default:   /* SP_GLO */

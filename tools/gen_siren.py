@@ -45,6 +45,10 @@ for s in STY:
             if lev and f'{L}|{e}:{p}' not in lev: sys.exit(f'gen_siren: {L}|{e}:{p} has no calibration: run tests/siren/level_cal > tools/siren/levels.json')
             c = lev.get(f'{L}|{e}:{p}', {}); trims.append(int(c.get('trim', 0))); tones.append(int(c.get('tone', 0)))
     spans.append(row)
+# (0.10) every layer's universe (each style's sounds, once) in 64: SIREN's banks are 64-bit masks (siren.c srb_*)
+for L in LAY[1:6]:
+    u = {k for st in STY for k in cur[st].get(L, []) if fm1(k, L)}
+    if len(u) > 64: sys.exit(f'gen_siren: {L} has {len(u)} sounds over all the styles: 64 at most (siren.c SRB_MAX)')
 o.append(f'#define SD_NSND {len(snd)}')
 o.append('static const sd_snd_t SD_SND[SD_NSND] = {' + ', '.join(f'{{"{e}", "{p}"}}' for e, p in snd) + '};')
 o.append(f'#define SD_NLIST {len(lst)}')

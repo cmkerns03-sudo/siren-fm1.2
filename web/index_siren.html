@@ -63,6 +63,7 @@
   summary { cursor: pointer; font-weight: 700; font-size: 19px; }
   .small { color: var(--dim); font-size: 15px; }
   a { color: inherit; }
+  a.studio { color: var(--acc, #ff6a1a); font-weight: 700; text-decoration: none; }
   .btn2 { display: inline-block; font-family: inherit; font-size: 17px; font-weight: 700; line-height: 1.2; background: var(--panel2); color: var(--fg);
           border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; cursor: pointer; text-decoration: none; }
   .btn2:disabled { color: var(--faint); cursor: default; }
@@ -110,6 +111,7 @@
         <dt>REC</dt><dd data-t="kRec"></dd>
         <dt>GLO</dt><dd data-t="kGlo"></dd>
       </dl>
+      <p><a class="studio" href="../studio/" data-t="studio"></a></p>
     </li>
   </ol>
 
@@ -156,6 +158,7 @@ const TEXT = {
     kAll: "ALL SOUNDS: the next tracks pick from every style's sounds", kEnv: "the form: BREAK, BUILD, DROP, FILL, NEW MELODY, NEXT TRACK...",
     kFx: "hold a white key: a DJ effect (rolls, filters, echo, risers)", kPreset: "another sound for the layer you chose (SELECT); every style's sounds",
     kRec: "a new rave (a new seed)", kGlo: "the settings and a reminder of every button",
+    studio: "SIREN STUDIO: play it live from the browser, share and import seeds, choose each style's sounds →",
     appInstall: "Install the app (the installer offline, Android too)",
     direct: "Connect the USB cable directly to the computer. No probe or Transporter is needed.",
     brick: "If an install fails and the FM-1 no longer starts, recovering it needs a Transporter:",
@@ -199,6 +202,7 @@ const TEXT = {
     kAll: "TOUS LES SONS : les morceaux suivants piochent dans les sons de tous les styles", kEnv: "la forme : BREAK, BUILD, DROP, FILL, NOUVELLE MÉLODIE, MORCEAU SUIVANT…",
     kFx: "garde une touche blanche : un effet de DJ (rolls, filtres, écho, risers)", kPreset: "un autre son pour la couche choisie (SELECT) ; les sons de tous les styles",
     kRec: "une nouvelle rave (une nouvelle graine)", kGlo: "les réglages et le rappel de chaque bouton",
+    studio: "SIREN STUDIO : joue en live depuis le navigateur, partage et importe des seeds, choisis les sons de chaque style →",
     appInstall: "Installer l'app (l'installateur hors ligne, Android aussi)",
     direct: "Branche le câble USB directement sur l'ordinateur. Aucune sonde ni Transporter n'est nécessaire.",
     brick: "Si une installation échoue et que la FM-1 ne démarre plus, il faut un Transporter pour la récupérer :",

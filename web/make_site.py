@@ -156,6 +156,10 @@ def main(pkg, version, out):
     for f in ("fukiai.ttf", "FUKIAI-LICENSE.txt"):
         if (HERE / f).exists():
             shutil.copy(HERE / f, ed / f)
+    if siren:                                     # (SIREN 0.10) SIREN STUDIO: live, seeds, banks (web/siren_studio.html)
+        st = out / "webapp" / "studio"
+        st.mkdir(parents=True, exist_ok=True)
+        (st / "index.html").write_text((HERE / "siren_studio.html").read_text(encoding="utf-8"), encoding="utf-8")
     app_files(out, version, name)
     title = "SIREN" if siren else "Clipper"
     (out / "index.html").write_text(

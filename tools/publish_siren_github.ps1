@@ -8,10 +8,10 @@
 # Uses your own Git and GitHub CLI (gh) and your own GitHub login (the browser): this script never sees a password or a
 # token. Nothing is ever forced on main: a repository that already has another history stops the script. gh-pages is
 # generated: it is replaced each time.
-param([string]$Owner = "", [string]$Repo = "siren-fm1", [string]$Tag = "v0.9.2", [switch]$Stable)
+param([string]$Owner = "", [string]$Repo = "siren-fm1", [string]$Tag = "v0.10", [switch]$Stable)
 $ErrorActionPreference = 'Continue'
 Set-Location (Split-Path $PSScriptRoot)
-$Version = "0.9.2"
+$Version = "0.10"
 function Fail([string]$m) { Write-Host ""; Write-Host "ERROR: $m" -ForegroundColor Red; exit 1 }
 function Step([string]$m) { Write-Host "== $m" -ForegroundColor Cyan }
 
