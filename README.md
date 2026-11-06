@@ -105,7 +105,8 @@ The installer page also takes you back to the official firmware. The `.fwsc` pac
 ## Building it yourself
 
 On Windows, with the same tools as Clipper and SLOOP (see [BUILDING.md](BUILDING.md)): `INSTALL-SIREN.bat` builds
-the firmware and opens the installer on your own computer. `ABYSS` (`INSTALL-ABYSS.bat`), SIREN's ambient sister, and
+the firmware and opens the installer on your own computer; `OPEN-SIREN-STUDIO.bat` opens SIREN STUDIO
+there (nothing to build). `ABYSS` (`INSTALL-ABYSS.bat`), SIREN's ambient sister, and
 Clipper (`INSTALL-CLIPPER.bat`) build from the same tree.
 
 The tests run on a computer: `HOST_ONLY=1 sh tests/run_tests.sh` (SIREN's brain against the prototype's, every style
