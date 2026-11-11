@@ -1,9 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* SIREN, the brain: a rave that writes itself. A seed and a grammar make a track; the sb_energy arc makes a set; the
- * mutations make it never repeat yet stay recognisable. This is the prototype's brain.js line for line (integers
- * only: energies, knobs, chances and levels in per mille, a seeded xorshift32), so the FM-1 plays what was heard on
- * the prototype: tests/siren_brain_test.c runs both and compares every event. Every draw from a stream happens in
- * the same order as there, every condition is evaluated in the same order (the draws inside conditions too). */
+/* SIREN, the brain: a rave that writes itself. Customized for Dark Outrun / French Electro ("Power Glove - Clutch"). */
 #include "siren_brain.h"
 
 /* ------------------------------------------------------------------------------------------------- the dice --- */
@@ -20,7 +16,7 @@ static uint32_t sb_hash(uint32_t a, uint32_t b)
     return h;
 }
 static int32_t sb_fdiv(int32_t a, int32_t b) { int32_t q = a / b; if ((a % b) && ((a < 0) != (b < 0))) q--; return q; }
-static int32_t sb_clamp(int32_t x, int32_lo, int32_t hi) { return x < lo ? lo : x > hi ? hi : x; }
+static int32_t sb_clamp(int32_t x, int32_t lo, int32_t hi) { return x < lo ? lo : x > hi ? hi : x; }
 static int32_t sb_abs(int32_t x) { return x < 0 ? -x : x; }
 static const char SB_B32[] = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 void sb_code(uint32_t seed, char out[9])
@@ -74,33 +70,25 @@ typedef struct {
 
 static const sb_style_t SB_STY[SB_NSTYLES] = {
     /* TECHNO */ { 1, GR_FOUR, 550, 1, 0, 0, 0, 126, 132, 3, {SB_MINOR, SB_PHRYGIAN, SB_DORIAN}, 4, {{1, {0}}, {4, {0, 0, 0, 5}}, {2, {0, 3}}, {4, {0, 0, 6, 0}}}, 4,
-                  3, {SBBK_RUMBLE, SBBK_OFFBEAT, SBBK_PULSE}, 40, {350, 450, 450, 550, 1000, 0}, 5, 11, 600, SBD_SNARE, 4, {SBD_RIM, SBD_CONGA, SBD_TOML, SBD_RIM}, 3, {SBHM_16, SBHM_OFF8, SBHM_16GAP} },
+                 3, {SBBK_RUMBLE, SBBK_OFFBEAT, SBBK_PULSE}, 40, {350, 450, 450, 550, 1000, 0}, 5, 11, 600, SBD_SNARE, 4, {SBD_RIM, SBD_CONGA, SBD_TOML, SBD_RIM}, 3, {SBHM_16, SBHM_OFF8, SBHM_16GAP} },
     /* TRANCE */ { 0, GR_FOUR, 0, 1, 0, 0, 0, 136, 140, 2, {SB_MINOR, SB_HARMONIC}, 5, {{4, {0, 5, 2, 6}}, {4, {0, 6, 5, 4}}, {4, {0, 3, 5, 4}}, {4, {5, 3, 0, 4}}, {4, {0, 5, 3, 4}}}, 2,
-                  3, {SBBK_OFFBEAT, SBBK_OFFBEAT, SBBK_ROLLING}, 0, {950, 850, 950, 200, 1000, 0}, 4, 8, 800, SBD_SNARE, 2, {SBD_SHAKE, SBD_RIM}, 2, {SBHM_16, SBHM_16GAP} },
+                 3, {SBBK_OFFBEAT, SBBK_OFFBEAT, SBBK_ROLLING}, 0, {950, 850, 950, 200, 1000, 0}, 4, 8, 800, SBD_SNARE, 2, {SBD_SHAKE, SBD_RIM}, 2, {SBHM_16, SBHM_16GAP} },
     /* PSY */    { 1, GR_FOUR, 0, 1, 0, 0, 0, 142, 146, 2, {SB_PHRYGIAN, SB_HARMONIC}, 3, {{1, {0}}, {2, {0, 1}}, {4, {0, 0, 0, 1}}}, 8,
-                  1, {SBBK_ROLLING}, 0, {600, 700, 350, 100, 1000, 0}, 6, 10, 300, SBD_SNARE, 3, {SBD_SHAKE, SBD_CONGA, SBD_RIM}, 2, {SBHM_16, SBHM_16} },
+                 1, {SBBK_ROLLING}, 0, {600, 700, 350, 100, 1000, 0}, 6, 10, 300, SBD_SNARE, 3, {SBD_SHAKE, SBD_CONGA, SBD_RIM}, 2, {SBHM_16, SBHM_16} },
     /* ACID */   { 1, GR_FOUR, 150, 0, 0, 0, 0, 128, 134, 2, {SB_MINOR, SB_PHRYGIAN}, 2, {{1, {0}}, {4, {0, 0, 5, 0}}}, 8,
-                  1, {SBBK_ACID}, 80, {200, 500, 300, 300, 1000, 0}, 6, 12, 500, SBD_CLAP, 3, {SBD_BELL, SBD_RIM, SBD_CLAVE}, 2, {SBHM_16, SBHM_16GAP} },
+                 1, {SBBK_ACID}, 80, {200, 500, 300, 300, 1000, 0}, 6, 12, 500, SBD_CLAP, 3, {SBD_BELL, SBD_RIM, SBD_CLAVE}, 2, {SBHM_16, SBHM_16GAP} },
     /* RAVE */   { 0, GR_BREAKS, 0, 0, 0, 0, 0, 140, 150, 2, {SB_MINOR, SB_HARMONIC}, 3, {{4, {0, 5, 6, 4}}, {4, {0, 3, 6, 5}}, {4, {0, 6, 5, 6}}}, 2,
-                  2, {SBBK_REESE, SBBK_OFFBEAT}, 0, {400, 600, 600, 950, 1000, 600}, 6, 12, 400, SBD_SNARE, 2, {SBD_RIM, SBD_SHAKE}, 2, {SBHM_8, SBHM_16GAP} },
-    /* OUTRUN */ { 0, GR_FOUR, 0, 1, 0, 0, 0, 96, 114, 2, {SB_MINOR, SB_DORIAN}, 5,
-                  {{4, {0, 5, 2, 6}}, {4, {0, 6, 5, 6}}, {4, {0, 5, 6, 0}}, {4, {0, 3, 5, 6}}, {2, {0, 5}}}, 2,
-                  3, {SBBK_ROLLING, SBBK_PULSE, SBBK_OFFBEAT}, 0, {850, 900, 950, 400, 1000, 0}, 4, 8, 0, SBD_SNARE, 3, {SBD_TOML, SBD_TOMH, SBD_RIM}, 3, {SBHM_8, SBHM_OFF8, SBHM_16} },
+                 2, {SBBK_REESE, SBBK_OFFBEAT}, 0, {400, 600, 600, 950, 1000, 600}, 6, 12, 400, SBD_SNARE, 2, {SBD_RIM, SBD_SHAKE}, 2, {SBHM_8, SBHM_16GAP} },
+    /* OUTRUN (Power Glove / Clutch profile: 102-112 BPM, Minor/Phrygian, Heavy Sub + Rolling Octave Bass, Tom Roll) */
+                 { 0, GR_FOUR, 250, 1, 800, 0, 0, 102, 112, 2, {SB_MINOR, SB_PHRYGIAN}, 5,
+                 {{4, {0, 5, 6, 4}}, {4, {0, 5, 6, 0}}, {4, {0, 6, 5, 4}}, {4, {0, 1, 5, 4}}, {2, {0, 5}}}, 2,
+                 1, {SBBK_ROLLING}, 0, {800, 1000, 950, 750, 1000, 0}, 6, 10, 0, SBD_TOML, 3, {SBD_TOML, SBD_TOMH, SBD_SNARE2}, 2, {SBHM_8, SBHM_16} },
     /* DNB */    { 0, GR_DNB, 0, 1, 850, 0, 0, 170, 176, 2, {SB_MINOR, SB_DORIAN}, 4, {{4, {0, 5, 3, 4}}, {2, {0, 3}}, {4, {0, 6, 5, 4}}, {4, {0, 0, 5, 6}}}, 2,
-                  3, {SBBK_ROLLER, SBBK_REESE, SBBK_ROLLER}, 0, {500, 500, 900, 450, 1000, 0}, 6, 10, 700, SBD_SNARE, 2, {SBD_RIM, SBD_SHAKE}, 2, {SBHM_8, SBHM_16GAP} },
+                 3, {SBBK_ROLLER, SBBK_REESE, SBBK_ROLLER}, 0, {500, 500, 900, 450, 1000, 0}, 6, 10, 700, SBD_SNARE, 2, {SBD_RIM, SBD_SHAKE}, 2, {SBHM_8, SBHM_16GAP} },
     /* HOUSE */  { 0, GR_FOUR, 0, 1, 0, 0, 0, 122, 126, 2, {SB_MINOR, SB_DORIAN}, 4, {{2, {0, 3}}, {4, {0, 5, 2, 6}}, {4, {0, 3, 6, 4}}, {4, {0, 0, 3, 3}}}, 2,
-                  3, {SBBK_OFFBEAT, SBBK_PULSE, SBBK_OFFBEAT}, 70, {350, 800, 800, 950, 900, 0}, 4, 9, 500, SBD_CLAP, 3, {SBD_SHAKE, SBD_CONGA, SBD_CLAVE}, 3, {SBHM_OFF8, SBHM_16, SBHM_16GAP} },
+                 3, {SBBK_OFFBEAT, SBBK_PULSE, SBBK_OFFBEAT}, 70, {350, 800, 800, 950, 900, 0}, 4, 9, 500, SBD_CLAP, 3, {SBD_SHAKE, SBD_CONGA, SBD_CLAVE}, 3, {SBHM_OFF8, SBHM_16, SBHM_16GAP} },
 };
-/* (0.6) the form of a track, generated: an intro (in two parts, now and then), then one to four waves, each a groove,
- * a breakdown (short before the first drop, longer after), a build (now and then a false one: build, a breath, build
- * again; or a bar of silence before the drop), the drop or the peak and a ride after it; then the outro. Each style
- * its proportions (from how its records are made: house's 32-bar intros and long grooves, techno's rides and few
- * builds, trance's long breakdowns, drum & bass's two drops, hard techno's short intros and frequent drops). Lengths
- * in bars; chances per mille. The next track never takes the same order of sections as the one before. */
-/* (0.6) how a track begins: the DJ's drum intro, or an atmosphere with no kick (a pad, a riser), the hook alone, the
- * whole groove under a closed low-pass that opens, the bassline and hats before the kick (the first half of the intro;
- * the drums come in for the second), straight into the groove and the drop, or the breakdown first. Each style its
- * share of each (per mille), as its records begin */
+
 enum { IK_DRUMS, IK_ATMOS, IK_HOOK, IK_FILTER, IK_BASS, IK_DIRECT, IK_BREAK, IK_N };
 static const uint16_t SB_INTRO_W[SB_NSTYLES][IK_N] = {
     {500, 100, 50, 100, 200, 50, 0},      /* TECHNO */
@@ -108,7 +96,7 @@ static const uint16_t SB_INTRO_W[SB_NSTYLES][IK_N] = {
     {330, 200, 50, 100, 250, 70, 0},      /* PSY */
     {330, 50, 50, 150, 370, 50, 0},       /* ACID */
     {330, 100, 200, 100, 50, 150, 70},    /* RAVE */
-    {200, 350, 250, 100, 100, 0, 0},      /* OUTRUN */
+    {100, 350, 200, 150, 200, 0, 0},      /* OUTRUN */
     {330, 150, 100, 100, 150, 70, 100},   /* DNB */
     {500, 50, 200, 150, 100, 0, 0},       /* HOUSE */
 };
@@ -117,7 +105,7 @@ typedef struct { uint8_t n, v[4]; } sb_opt_t;
 typedef struct {
     sb_opt_t intro, intro2, groove1, midg, brks, brkl, build, drop, tail, outro;
     uint16_t p_intro2, p_groove1, p_mid, p_break1, p_build, p_fake, p_pause, p_peak, p_peaklast, p_tail;
-    uint8_t cyc_lo, cyc_hi; uint16_t max_bars;    /* (about six minutes at the style's tempo) */
+    uint8_t cyc_lo, cyc_hi; uint16_t max_bars;
 } sb_form_t;
 
 static const sb_form_t SB_FORM[SB_NSTYLES] = {
@@ -131,8 +119,8 @@ static const sb_form_t SB_FORM[SB_NSTYLES] = {
                    400, 1000, 700, 500, 600, 50, 100, 200, 300, 500, 1, 3, 200 },
     /* RAVE */   { {2, {8, 16}}, {2, {8, 16}}, {1, {16}}, {2, {8, 16}}, {1, {8}}, {2, {8, 16}}, {2, {8, 16}}, {2, {16, 32}}, {2, {8, 16}}, {2, {8, 16}},
                    300, 600, 400, 500, 900, 200, 300, 200, 600, 300, 2, 3, 200 },
-    /* OUTRUN */ { {2, {16, 32}}, {1, {16}}, {2, {16, 32}}, {2, {16, 32}}, {1, {8}}, {2, {8, 16}}, {2, {4, 8}}, {3, {16, 16, 32}}, {2, {8, 16}}, {2, {8, 16}},
-                   500, 800, 500, 400, 600, 50, 100, 400, 600, 400, 2, 3, 192 },
+    /* OUTRUN */ { {2, {8, 16}}, {1, {8}}, {2, {16, 32}}, {2, {16, 32}}, {1, {8}}, {2, {8, 16}}, {2, {4, 8}}, {3, {16, 16, 32}}, {2, {8, 16}}, {2, {8, 16}},
+                   500, 800, 500, 500, 800, 100, 200, 500, 750, 400, 2, 3, 192 },
     /* DNB */    { {3, {16, 32, 32}}, {1, {16}}, {1, {8}}, {1, {8}}, {1, {8}}, {3, {16, 24, 32}}, {2, {8, 16}}, {3, {32, 32, 48}}, {1, {8}}, {2, {16, 32}},
                    300, 200, 100, 300, 1000, 150, 300, 100, 400, 200, 2, 3, 256 },
     /* HOUSE */  { {3, {16, 32, 32}}, {2, {16, 32}}, {3, {32, 48, 64}}, {2, {16, 32}}, {1, {8}}, {2, {8, 16}}, {1, {8}}, {3, {32, 32, 48}}, {2, {16, 32}}, {2, {16, 32}},
@@ -142,7 +130,7 @@ static const sb_form_t SB_FORM[SB_NSTYLES] = {
 static int sb_opt(sb_rng_t *r, const sb_opt_t *o) { return o->v[sb_ri(r, o->n)]; }
 static void sb_sec(sb_brain_t *b, int sec, int len)
 {
-    if (b->plan_n && b->plan_sec[b->plan_n - 1] == sec) { b->plan_len[b->plan_n - 1] = (uint16_t)(b->plan_len[b->plan_n - 1] + len); return; }   /* (one longer) */
+    if (b->plan_n && b->plan_sec[b->plan_n - 1] == sec) { b->plan_len[b->plan_n - 1] = (uint16_t)(b->plan_len[b->plan_n - 1] + len); return; }
     if (b->plan_n >= SB_PLAN_MAX) return;
     b->plan_sec[b->plan_n] = (uint8_t)sec; b->plan_len[b->plan_n] = (uint16_t)len; b->plan_n++;
 }
@@ -155,8 +143,8 @@ static void sb_form(sb_brain_t *b, sb_rng_t *r)
     while (ik < IK_N - 1 && w >= SB_INTRO_W[b->style][ik]) w -= SB_INTRO_W[b->style][ik++];
     b->intro_kind = (uint8_t)ik;
     b->plan_n = 0;
-    if (ik == IK_DIRECT) sb_sec(b, SEC_GROOVE, SB_PICK(r, DIRECT));               /* (straight in: a few bars, the drop) */
-    else if (ik == IK_BREAK) sb_sec(b, SEC_BREAK, sb_opt(r, &f->brkl));          /* (the breakdown first) */
+    if (ik == IK_DIRECT) sb_sec(b, SEC_GROOVE, SB_PICK(r, DIRECT));
+    else if (ik == IK_BREAK) sb_sec(b, SEC_BREAK, sb_opt(r, &f->brkl));
     else {
         sb_sec(b, SEC_INTRO, sb_opt(r, &f->intro));
         if (sb_rchance(r, f->p_intro2)) sb_sec(b, SEC_GROOVE, sb_opt(r, &f->intro2));
@@ -164,8 +152,8 @@ static void sb_form(sb_brain_t *b, sb_rng_t *r)
     ncyc = f->cyc_lo + (int)sb_ri(r, (uint32_t)(f->cyc_hi - f->cyc_lo + 1));
     for (c = 0; c < ncyc; c++) {
         int last = c == ncyc - 1;
-        if (!c && ik == IK_BREAK) sb_sec(b, SEC_BUILD, sb_opt(r, &f->build));      /* (the breakdown first: its build, the drop) */
-        else if (!c && ik == IK_DIRECT) { }                                         /* (straight in: the drop now) */
+        if (!c && ik == IK_BREAK) sb_sec(b, SEC_BUILD, sb_opt(r, &f->build));
+        else if (!c && ik == IK_DIRECT) { }
         else {
             if (sb_rchance(r, c ? f->p_mid : f->p_groove1)) sb_sec(b, SEC_GROOVE, sb_opt(r, c ? &f->midg : &f->groove1));
             if (c || sb_rchance(r, f->p_break1)) sb_sec(b, SEC_BREAK, sb_opt(r, c ? &f->brkl : &f->brks));
@@ -199,15 +187,21 @@ static void sb_new_track(sb_brain_t *b, uint32_t seed, int style, int has_prev, 
     int i;
     b->seed = seed; b->style = (uint8_t)style;
     b->scale = st->scales[sb_rnext(&r) % st->nscales];
-    b->key = has_prev ? (uint8_t)((prev_key + SB_PICK(&r, KEYSTEP)) % 12) : (uint8_t)sb_ri(&r, 12);
+    /* Bias OUTRUN toward dark D minor (key = 2) or A minor (key = 9) */
+    if (style == SB_OUTRUN && !has_prev) {
+        static const uint8_t DARK_KEYS[4] = {2, 2, 9, 0};
+        b->key = SB_PICK(&r, DARK_KEYS);
+    } else {
+        b->key = has_prev ? (uint8_t)((prev_key + SB_PICK(&r, KEYSTEP)) % 12) : (uint8_t)sb_ri(&r, 12);
+    }
     if (has_prev) b->bpm_target = (uint8_t)sb_clamp(prev_bpm + (int)sb_ri(&r, 5) - 2, st->bpm_lo, st->bpm_hi);
     else b->bpm_target = (uint8_t)(st->bpm_lo + sb_ri(&r, (uint32_t)(st->bpm_hi - st->bpm_lo + 1)));
-    b->bpm = has_prev && sb_abs(prev_bpm - b->bpm_target) <= 12 ? (uint8_t)prev_bpm : b->bpm_target;   /* (far apart: the new tempo at once) */
+    b->bpm = has_prev && sb_abs(prev_bpm - b->bpm_target) <= 12 ? (uint8_t)prev_bpm : b->bpm_target;
     { const sb_prog_t *p = &st->progs[sb_rnext(&r) % st->nprogs]; b->prog = p->c; b->nprog = p->n; }
     b->chord_bars = st->chord_bars;
     b->kit_pick = sb_rnext(&r); b->swing = st->swing;
     b->bass_kind = st->bass[sb_rnext(&r) % st->nbass];
-    {   /* (0.6) the form, from its own stream; never the order of sections the last track had */
+    {
         sb_rng_t pr = sb_rng(sb_hash(seed, 7));
         uint8_t was[SB_PLAN_MAX], wn = has_prev ? b->plan_n : 0;
         int t;
@@ -219,7 +213,7 @@ static void sb_new_track(sb_brain_t *b, uint32_t seed, int style, int has_prev, 
             for (i = 0; same && i < wn; i++) if (was[i] != b->plan_sec[i]) same = 0;
             if (!same) break;
         }
-        {   /* too long for the style: the longest of its long sections 8 bars shorter, until it fits */
+        {
             int bars = 0, k;
             for (i = 0; i < b->plan_n; i++) bars += b->plan_len[i];
             while (bars > SB_FORM[style].max_bars) {
@@ -232,7 +226,7 @@ static void sb_new_track(sb_brain_t *b, uint32_t seed, int style, int has_prev, 
     }
     b->plan_at = 0; b->sec_bar = 0; b->phrase_bar = 0;
     for (i = 0; i < 6; i++) b->layer_on[i] = (uint8_t)sb_rchance(&r, st->layers[i]);
-    if (!b->layer_on[1] && !b->layer_on[0]) b->layer_on[1] = 1;   /* (a track always sings something) */
+    if (!b->layer_on[1] && !b->layer_on[0]) b->layer_on[1] = 1;
     sb_motifs(b); sb_pick_sounds(b);
     b->track_start_bar = b->bar;
 }
@@ -242,15 +236,15 @@ void sb_init(sb_brain_t *b, const sb_palette_t *pal)
     int i;
     uint8_t *z = (uint8_t *)b;
     for (i = 0; i < (int)sizeof *b; i++) z[i] = 0;
-    b->style = SB_TRANCE;
-    b->knobs[K_ENERGY] = 500; b->knobs[K_DENSITY] = 500; b->knobs[K_TENSION] = 500; b->knobs[K_MUTATION] = 350;
+    b->style = SB_OUTRUN;
+    b->knobs[K_ENERGY] = 650; b->knobs[K_DENSITY] = 600; b->knobs[K_TENSION] = 650; b->knobs[K_MUTATION] = 300;
     for (i = 0; i < SB_NLAYERS; i++) b->snd[i] = -1;
     b->kit_force = -1;
     b->pal = pal;
-    sb_new_track(b, 0x51A3u, SB_TRANCE, 0, 0, 0);
+    sb_new_track(b, 0x51A3u, SB_OUTRUN, 0, 0, 0);
 }
 
-/* the sounds of this track: a pick for each layer from the style's selection, by its own stream */
+/* the sounds of this track */
 static void sb_pick_sounds(sb_brain_t *b)
 {
     const sb_palette_t *p = b->pal; const sb_style_t *st = SB_ST(b); int L;
@@ -262,10 +256,9 @@ static void sb_pick_sounds(sb_brain_t *b)
         n = p->ncur[b->style][L];
         if (n) b->snd[L] = (int16_t)sb_ri(&r, (uint32_t)n);
     }
-    /* the drums: one of the style's own kits, its kick (and boom) tuned to the key */
     {
         int nk = p->nkits[b->style], ki = nk ? (int)(b->kit_pick % (uint32_t)nk) : 0, w, kx;
-        if (b->locks[L_DRUMS] && b->kit_force >= 0 && p->nkall) { ki = b->kit_force % p->nkall; nk = p->nkall; }   /* (SIREN 0.10) */
+        if (b->locks[L_DRUMS] && b->kit_force >= 0 && p->nkall) { ki = b->kit_force % p->nkall; nk = p->nkall; }
         kx = p->kit_at[b->style] ? p->kit_at[b->style][ki] : p->kit_first[b->style] + ki;
         b->snd[L_DRUMS] = (int16_t)ki;
         for (w = 0; w < 2; w++) {
@@ -278,7 +271,6 @@ static void sb_pick_sounds(sb_brain_t *b)
             if (w) b->kick2_n16 = (uint16_t)best; else b->kick_n16 = (uint16_t)best;
         }
     }
-    /* dubstep: the bass changes its sound inside a drop */
     b->has_alt = 0;
     if (st->drop_bass && !b->locks[L_BASS]) {
         sb_rng_t r2 = sb_rng(sb_hash(b->seed, (uint32_t)(177 + b->rerolls[L_BASS] * 131)));
@@ -289,7 +281,7 @@ static void sb_pick_sounds(sb_brain_t *b)
 }
 static sb_bstep_t sb_bs(int d, int o, int len, int v) { sb_bstep_t s; s.d = (int8_t)d; s.o = (int8_t)o; s.len = (uint8_t)len; s.v = (uint8_t)v; s.slide = 0; s.on = 1; s.has_wob = 0; s.wob.rate3 = 0; s.wob.shape = 0; s.wob.depth = 0; s.wob.growl = 0; return s; }
 
-/* the sb_motifs: each layer's pattern, from its own stream (a locked layer keeps its own) */
+/* the sb_motifs */
 static void sb_motifs(sb_brain_t *b)
 {
     const sb_style_t *st = SB_ST(b); int G = st->groove, i, j;
@@ -324,7 +316,18 @@ static void sb_motifs(sb_brain_t *b)
         b->bass_n = (uint8_t)(two ? 32 : 16);
         for (i = 0; i < 32; i++) s[i].on = 0;
         if (kind == SBBK_OFFBEAT) { for (i = 2; i < 16; i += 4) s[i] = sb_bs(0, 0, 1, 100); }
-        else if (kind == SBBK_ROLLING) { for (i = 0; i < 16; i++) if (i % 4) { int d = (i % 4 == 3 && sb_rchance(&r, 250)) ? 4 : 0; s[i] = sb_bs(d, 0, 1, i % 4 == 1 ? 110 : 90); } }
+        else if (kind == SBBK_ROLLING) {
+            if (b->style == SB_OUTRUN) {
+                /* Clutch-style relentless 16th-note rolling octave bassline */
+                for (i = 0; i < 16; i++) {
+                    int oct = (i % 4 == 2 || i % 4 == 3) ? 1 : 0;
+                    int vel = (i % 4 == 0) ? 124 : (i % 4 == 2) ? 114 : 98;
+                    s[i] = sb_bs(0, oct, 1, vel);
+                }
+            } else {
+                for (i = 0; i < 16; i++) if (i % 4) { int d = (i % 4 == 3 && sb_rchance(&r, 250)) ? 4 : 0; s[i] = sb_bs(d, 0, 1, i % 4 == 1 ? 110 : 90); }
+            }
+        }
         else if (kind == SBBK_RUMBLE) { for (i = 2; i < 16; i += 4) s[i] = sb_bs(0, 0, 2, 90); }
         else if (kind == SBBK_PULSE) { for (i = 0; i < 16; i += 2) if (i % 4) s[i] = sb_bs(0, 0, 1, 95); }
         else if (kind == SBBK_REESE) { static const int8_t D3[3] = {4, 6, 2}; s[0] = sb_bs(0, 0, 8, 100); s[8] = sb_bs(0, 0, 6, 95); s[14] = sb_bs(SB_PICK(&r, D3), 0, 2, 90); }
@@ -340,7 +343,7 @@ static void sb_motifs(sb_brain_t *b)
                 s[at].has_wob = 1; s[at].wob.rate3 = SB_PICK(&r, RATE); s[at].wob.shape = 0; s[at].wob.depth = 350; s[at].wob.growl = 0;
             }
         }
-        else if (two) {                                  /* dubstep: a 2-bar riff of hits, each its own wobble rate */
+        else if (two) {
             static const uint8_t RATES_R[4] = {4, 8, 2, 4}, RATES_W[7] = {12, 6, 4, 3, 24, 2, 6}, SH_R[3] = {2, 1, 2}, SH_W[5] = {0, 1, 2, 3, 0};
             static const uint8_t DEG_P[8] = {0, 0, 0, 0, 1, 4, 6, 7}, DEG_M[8] = {0, 0, 0, 0, 4, 5, 6, 7};
             static const uint8_t LR[3] = {2, 3, 3}, LW[6] = {2, 3, 4, 4, 6, 8}, GR[4] = {1, 1, 2, 3}, GW[4] = {0, 0, 1, 2}, L2[5] = {1, 2, 2, 3, 4};
@@ -359,7 +362,7 @@ static void sb_motifs(sb_brain_t *b)
                 s[i] = sb_bs(d == 7 ? 0 : d, d == 7 ? 1 : 0, len < 16 - i ? len : 16 - i, 115); SB_WOB(s[i], 600, 400, 300, 600);
                 i += len + gap;
             }
-            for (j = 0; j < 16; j++) s[16 + j] = s[j];           /* the answer: bar 2 repeats bar 1, its end changed */
+            for (j = 0; j < 16; j++) s[16 + j] = s[j];
             for (j = 24; j < 32; j++) s[j].on = 0;
             for (j = 24; j < 32;) {
                 int len = SB_PICK(&r, L2);
@@ -377,21 +380,46 @@ static void sb_motifs(sb_brain_t *b)
         }
     }
     if (!SB_KEEP(L_HOOK)) {
-        static const int8_t D0[4] = {0, 2, 4, 7}, STEP[9] = {-2, -1, -1, 0, 1, 1, 2, 3, -3};
-        sb_rng_t r = SB_RL(L_HOOK); int len = sb_rchance(&r, 500) ? 32 : 16, dens = 350 + 350 * b->knobs[K_DENSITY] / 1000, d;
-        d = SB_PICK(&r, D0);
-        for (i = 0; i < len; i++) {
-            int strong = i % 4 == 0, on = strong ? sb_rchance(&r, 800) : sb_rchance(&r, i % 2 ? dens * 7 / 10 : dens);
-            sb_hstep_t *h = &b->hook[i];
-            if (!on) { h->on = 0; continue; }
-            d += SB_PICK(&r, STEP);
-            if (d < -2) d += 4;
-            if (d > 9) d -= 5;
-            if (strong) { int bb = 0, c; for (c = 0; c < 4; c++) if (sb_abs(D0[c] - d) < sb_abs(bb - d)) bb = D0[c]; d = bb; }
-            h->d = (int8_t)d; h->o = 1; h->len = (uint8_t)(sb_rchance(&r, 300) ? 2 : 1); h->v = (uint8_t)(strong ? 112 : 92); h->on = 1;
+        if (b->style == SB_OUTRUN) {
+            /* Power Glove - Clutch screaming guitar-synth hook: aggressive intervals + held screams */
+            static const int8_t CLUTCH_D[6] = {0, 1, 2, 4, 5, 7};
+            static const int8_t CLUTCH_STEP[8] = {-2, -1, 0, 1, 2, 3, 5, -5};
+            static const uint8_t CLUTCH_MASK[16] = {1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0};
+            sb_rng_t r = SB_RL(L_HOOK); int len = 32, d = 0;
+            for (i = 0; i < len; i++) {
+                sb_hstep_t *h = &b->hook[i];
+                int step16 = i % 16;
+                int on = CLUTCH_MASK[step16] ? sb_rchance(&r, 850) : sb_rchance(&r, 150);
+                if (!on) { h->on = 0; continue; }
+                if (step16 == 0) d = SB_PICK(&r, CLUTCH_D);
+                else d += SB_PICK(&r, CLUTCH_STEP);
+                if (d < 0) d += 7;
+                if (d > 9) d -= 5;
+                h->d = (int8_t)d;
+                h->o = (int8_t)((step16 == 10 || step16 == 14) && sb_rchance(&r, 450) ? 2 : 1);
+                h->len = (uint8_t)((step16 == 0 || step16 == 6) ? 4 : 2);
+                h->v = (uint8_t)(step16 == 0 || step16 == 6 ? 127 : 114);
+                h->on = 1;
+            }
+            b->hook_n = (uint8_t)len;
+            for (i = 0; i < len; i++) b->theme[i] = b->hook[i];
+        } else {
+            static const int8_t D0[4] = {0, 2, 4, 7}, STEP[9] = {-2, -1, -1, 0, 1, 1, 2, 3, -3};
+            sb_rng_t r = SB_RL(L_HOOK); int len = sb_rchance(&r, 500) ? 32 : 16, dens = 350 + 350 * b->knobs[K_DENSITY] / 1000, d;
+            d = SB_PICK(&r, D0);
+            for (i = 0; i < len; i++) {
+                int strong = i % 4 == 0, on = strong ? sb_rchance(&r, 800) : sb_rchance(&r, i % 2 ? dens * 7 / 10 : dens);
+                sb_hstep_t *h = &b->hook[i];
+                if (!on) { h->on = 0; continue; }
+                d += SB_PICK(&r, STEP);
+                if (d < -2) d += 4;
+                if (d > 9) d -= 5;
+                if (strong) { int bb = 0, c; for (c = 0; c < 4; c++) if (sb_abs(D0[c] - d) < sb_abs(bb - d)) bb = D0[c]; d = bb; }
+                h->d = (int8_t)d; h->o = 1; h->len = (uint8_t)(sb_rchance(&r, 300) ? 2 : 1); h->v = (uint8_t)(strong ? 112 : 92); h->on = 1;
+            }
+            b->hook_n = (uint8_t)len;
+            for (i = 0; i < len; i++) b->theme[i] = b->hook[i];
         }
-        b->hook_n = (uint8_t)len;
-        for (i = 0; i < len; i++) b->theme[i] = b->hook[i];
     }
     if (!SB_KEEP(L_ARP)) {
         static const uint8_t RATE[4] = {1, 1, 1, 2}, GATE[3] = {0, 0, 1};
@@ -406,13 +434,13 @@ static void sb_motifs(sb_brain_t *b)
 #undef SB_KEEP
 }
 
-/* a phrase ends: the sb_motifs develop (a little, as MUTATION says), and the theme comes back now and then */
+/* a phrase ends: the sb_motifs develop */
 static void sb_mutate(sb_brain_t *b)
 {
     int m = b->knobs[K_MUTATION]; sb_rng_t r = sb_rng(sb_hash(b->seed, 7000 + b->bar));
     if (!b->locks[L_HOOK] && sb_rchance(&r, m)) {
         sb_hstep_t *s = b->hook; int n = b->hook_n, j;
-        if (sb_rchance(&r, 180)) { for (j = 0; j < n; j++) s[j] = b->theme[j]; }      /* the theme again */
+        if (sb_rchance(&r, 180)) { for (j = 0; j < n; j++) s[j] = b->theme[j]; }
         else {
             int op = (int)sb_ri(&r, 6), i = (int)sb_ri(&r, (uint32_t)n);
             if (op == 0) { sb_hstep_t t = s[n - 1]; for (j = n - 1; j > 0; j--) s[j] = s[j - 1]; s[0] = t; }
@@ -445,34 +473,32 @@ static int sb_energy(const sb_brain_t *b) { return sb_clamp(sb_arc_energy(b) + (
 static void sb_plan_insert(sb_brain_t *b, int at, int sec, int len)
 {
     int i;
-    if (b->plan_n >= SB_PLAN_MAX) {                       /* (0.5: full, the hands asking again and again) the plan's last */
-        if (b->plan_n - 1 <= at) return;                 /* section gives way */
+    if (b->plan_n >= SB_PLAN_MAX) {
+        if (b->plan_n - 1 <= at) return;
         b->plan_n--;
     }
     for (i = b->plan_n; i > at; i--) { b->plan_sec[i] = b->plan_sec[i - 1]; b->plan_len[i] = b->plan_len[i - 1]; }
     b->plan_sec[at] = (uint8_t)sec; b->plan_len[at] = (uint16_t)len; b->plan_n++;
 }
 
-static void sb_enter(sb_brain_t *b)                      /* the next section (past the plan's end: the next track) */
+static void sb_enter(sb_brain_t *b)
 {
     b->plan_at++; b->sec_bar = 0; b->phrase_bar = 0;
     if (b->plan_at >= b->plan_n) sb_next_track(b);
 }
 
-static void sb_key_up(sb_brain_t *b)                     /* (0.5) KEY UP asked: a tone up as a drop begins */
+static void sb_key_up(sb_brain_t *b)
 {
     if (b->key_req && b->plan_at < b->plan_n && b->plan_sec[b->plan_at] == SEC_DROP && b->sec_bar == 0) {
         b->key_req = 0; b->key = (uint8_t)((b->key + 2) % 12); sb_pick_sounds(b);
     }
 }
 
-/* a bar ends: every 8 bars the sb_motifs develop; DIVE and BREAK change the plan on the next bar; the next section,
- * and at the plan's end the next track, born of this one */
 static void sb_next_bar(sb_brain_t *b)
 {
     b->sec_bar++; b->phrase_bar++;
     if (b->phrase_bar == 8) { b->phrase_bar = 0; sb_mutate(b); }
-    if (b->drop_req) {                                   /* (0.5) DROP: from this bar */
+    if (b->drop_req) {
         b->drop_req = 0; b->dive = 0;
         if (b->plan_sec[b->plan_at] != SEC_DROP) { sb_plan_insert(b, b->plan_at + 1, SEC_DROP, 32); sb_enter(b); sb_key_up(b); return; }
     }
@@ -487,7 +513,7 @@ static void sb_next_bar(sb_brain_t *b)
     }
     if (b->break_req) { b->break_req = 0; sb_plan_insert(b, b->plan_at + 1, SEC_BREAK, 8); sb_enter(b); return; }
     if (b->sec_bar >= b->plan_len[b->plan_at]) {
-        if (b->stay && b->plan_sec[b->plan_at] != SEC_BUILD) {   /* (0.5) STAY: the section's last phrase again */
+        if (b->stay && b->plan_sec[b->plan_at] != SEC_BUILD) {
             int len = b->plan_len[b->plan_at];
             b->sec_bar = (uint16_t)(len >= 8 ? len - 8 : 0);
         } else
@@ -498,7 +524,6 @@ static void sb_next_bar(sb_brain_t *b)
         sb_next_track(b);
 }
 
-/* the track ends: the next one, born of this one (its key and tempo near), now and then in a neighbouring style */
 void sb_next_track(sb_brain_t *b)
 {
     {
@@ -512,13 +537,14 @@ void sb_next_track(sb_brain_t *b)
         sb_new_track(b, sb_hash(b->seed, n), style, 1, pk, pb);
     }
 }
+
 /* -------------------------------------------------------------------------------------------- one sixteenth --- */
 static int sb_note_of(const sb_brain_t *b, int chord, int deg, int oct, int base)
 {
     int n = deg + chord, o = sb_fdiv(n, 7), d = ((n % 7) + 7) % 7;
     return base + b->key + 12 * (o + oct) + SB_SCALES[b->scale][d];
 }
-static int sb_fold(int n, int top) { while (n > top) n -= 12; return n; }   /* (0.2) a melodic note an octave down while over top */
+static int sb_fold(int n, int top) { while (n > top) n -= 12; return n; }
 static void sb_add(sb_events_t *ev, int L, int n, int v, int len)
 {
     sb_note_t *x;
@@ -526,7 +552,6 @@ static void sb_add(sb_events_t *ev, int L, int n, int v, int len)
     x = &ev->notes[ev->nnotes++];
     x->layer = (uint8_t)L; x->note = (uint8_t)sb_clamp(n, 0, 127); x->vel = (uint8_t)sb_clamp(v, 1, 127); x->len = (uint16_t)(len ? len : 1);
 }
-/* (0.6) quiet: 2 no drums at all (the atmosphere's and the hook's first half), 1 no kick and no backbeat (the bassline's) */
 #define SB_DRUM(lane, v) do { int ln_ = (lane); if (!(quiet == 2 || (quiet == 1 && (ln_ == SBD_KICK || ln_ == SBD_KICK2 || ln_ == SBD_CLAP || ln_ == SBD_SNARE)))) sb_add(ev, L_DRUMS, ln_, (v), 1); } while (0)
 
 void sb_step16(sb_brain_t *b, sb_events_t *ev)
@@ -538,10 +563,17 @@ void sb_step16(sb_brain_t *b, sb_events_t *ev)
     int lastBarOfBuild = sec == SEC_BUILD && barInSec == secLen - 1;
     sb_rng_t r = sb_rng(sb_hash(b->seed, bar * 16u + (uint32_t)step + 99991u));
     int chord, dens = b->knobs[K_DENSITY], G = st->groove, brk, live, intro0, kickOn, brkD, half, bb, bbOn, offbeat, ohOn, bassDrop, t, L;
-    /* (0.6) the intro as its kind plays it: its first half its own opening, then the drums come in; the filtered one is
-     * the drop itself, under a low-pass that opens across the intro */
     int sec_real = sec, ik = sec == SEC_INTRO ? b->intro_kind : IK_DRUMS, first = ik != IK_DRUMS && 2 * barInSec < secLen;
     int quiet = first && (ik == IK_ATMOS || ik == IK_HOOK) ? 2 : first && ik == IK_BASS ? 1 : 0;
+
+    /* Detect active Gated Tom Fill (either manual FILL button / dive or automatic end-of-phrase / end-of-build) */
+    int tomFillActive = 0;
+    if (b->dive == 1 || lastBarOfBuild) tomFillActive = 1;
+    if (!tomFillActive && (sec == SEC_GROOVE || sec == SEC_DROP || sec == SEC_PEAK) && barInPhrase == 7) {
+        sb_rng_t rf = sb_rng(sb_hash(b->seed, bar * 3u + 5u));
+        if (b->style == SB_OUTRUN || sb_rchance(&rf, 350 + 400 * dens / 1000)) tomFillActive = 1;
+    }
+
     (void)dummy;
     if (ik == IK_FILTER) { sec = SEC_DROP; e = sb_clamp(SB_SEC_E[SEC_DROP] + (b->knobs[K_ENERGY] - 500) * 7 / 10, 0, 1000); }
     ev->nnotes = 0; ev->has_wob = 0;
@@ -550,61 +582,73 @@ void sb_step16(sb_brain_t *b, sb_events_t *ev)
     chord = b->prog[((bar - b->track_start_bar) / b->chord_bars) % b->nprog];
 #define SB_NOTE(deg, oct, base) sb_note_of(b, chord, (deg), (oct), (base))
 
-    /* ---- drums: the style's groove */
+    /* ---- drums: the style's groove + Power Glove Gated Tom Roll Override */
     brk = sec == SEC_BREAK; live = sec == SEC_DROP || sec == SEC_PEAK; intro0 = sec == SEC_INTRO && barInSec < 2 && b->track_no == 0;
-    kickOn = !brk && !(lastBarOfBuild && step >= 8) && !(sec == SEC_BUILD && G != GR_FOUR && barInSec >= secLen - 2 && step >= 8);
-    brkD = !brk || st->break_drums;
+    kickOn = !brk && !tomFillActive && !(sec == SEC_BUILD && G != GR_FOUR && barInSec >= secLen - 2 && step >= 8);
+    brkD = (!brk || st->break_drums) && !tomFillActive;
     half = G == GR_HALF; bb = half ? step == 8 : step == 4 || step == 12;
-    if (kickOn) {
+
+    if (tomFillActive) {
+        /* Descending Simmons Tom Cascade (Beats 1-3) + Beat 4 Dramatic Vacuum Silence */
+        static const uint8_t CLUTCH_TOM_LANE[16] = {
+            SBD_TOMH, 0,        SBD_TOMH, SBD_TOMH,   /* Beat 1: High Tom syncopated slam */
+            SBD_TOMH, 0,        SBD_TOML, SBD_TOML,   /* Beat 2: Mid-to-Low Tom transition */
+            SBD_TOML, SBD_TOML, SBD_TOML, 0,          /* Beat 3: Heavy Floor Tom triplet roll */
+            0,        0,        0,        0           /* Beat 4: Dead silence so gated reverb blooms */
+        };
+        static const uint8_t CLUTCH_TOM_VEL[16] = {
+            112,   0, 115, 118,
+            120,   0, 122, 124,
+            126, 127, 127,   0,
+              0,   0,   0,   0
+        };
+        if (CLUTCH_TOM_LANE[step]) {
+            SB_DRUM(CLUTCH_TOM_LANE[step], CLUTCH_TOM_VEL[step]);
+        }
+    } else {
+        if (kickOn) {
+            if (G == GR_FOUR) {
+                if (step % 4 == 0 && !(intro0 && step % 8)) SB_DRUM(SBD_KICK, b->style == SB_OUTRUN ? 127 : 120);
+                if (b->dr.gallop && live && step == 14 && barInPhrase % 2 == 1) SB_DRUM(SBD_KICK, 105);
+            } else if (sec == SEC_BUILD) { if (step % (2 * barInSec < secLen ? 8 : 4) == 0) SB_DRUM(SBD_KICK, 110); }
+            else {
+                if (sb_has(b->dr.break_k, b->dr.nbreak_k, step) && !(intro0 && step)) SB_DRUM(SBD_KICK, step ? 108 : 122);
+                if (G == GR_BREAKS && b->dr.four && live && step % 4 == 0 && !sb_has(b->dr.break_k, b->dr.nbreak_k, step)) SB_DRUM(SBD_KICK2, 100);
+            }
+        }
+        if (live && step == 0 && (barInSec == 0 || (barInPhrase == 0 && sb_rchance(&r, 500)))) SB_DRUM(SBD_CRASH, barInSec == 0 ? 125 : 105);
+        bbOn = sec != SEC_BUILD && !(sec == SEC_INTRO && barInSec < 4) && !brk;
         if (G == GR_FOUR) {
-            if (step % 4 == 0 && !(intro0 && step % 8)) SB_DRUM(SBD_KICK, 120);
-            if (b->dr.gallop && live && step == 14 && barInPhrase % 2 == 1) SB_DRUM(SBD_KICK, 105);
-        } else if (sec == SEC_BUILD) { if (step % (2 * barInSec < secLen ? 8 : 4) == 0) SB_DRUM(SBD_KICK, 110); }
-        else {
-            if (sb_has(b->dr.break_k, b->dr.nbreak_k, step) && !(intro0 && step)) SB_DRUM(SBD_KICK, step ? 108 : 122);
-            if (G == GR_BREAKS && b->dr.four && live && step % 4 == 0 && !sb_has(b->dr.break_k, b->dr.nbreak_k, step)) SB_DRUM(SBD_KICK2, 100);
+            if (bbOn && e > 330 && bb && (sec != SEC_GROOVE || b->dr.clap_groove || b->style != SB_TECHNO) && !(b->style == SB_PSY && !live && sec != SEC_GROOVE)) SB_DRUM(SBD_CLAP, 112);
+            if (bbOn && (b->style == SB_OUTRUN || b->style == SB_HARD) && bb) SB_DRUM(SBD_SNARE, 127);
+            if (bbOn && b->style == SB_ACID && e > 500 && (step == 7 || step == 15) && sb_rchance(&r, 500)) SB_DRUM(SBD_SNARE, 52);
+        } else if (bbOn && e > 300) {
+            if (bb) { SB_DRUM(SBD_SNARE, 120); if (half || live) SB_DRUM(SBD_CLAP, half ? 115 : 90); }
+            if (sb_has(b->dr.ghost, b->dr.nghost, step) && sb_rchance(&r, 500 + 400 * dens / 1000)) SB_DRUM(SBD_SNARE2, 45 + 20 * e / 1000);
+        }
+        offbeat = step % 4 == 2;
+        ohOn = brkD && e > 450 && !brk && (G == GR_FOUR || (G != GR_HALF && live && step == 14) || (half && live && (step == 6 || step == 14) && b->dr.four));
+        if (ohOn && (G != GR_FOUR || offbeat)) SB_DRUM(SBD_OPEN, (G == GR_FOUR ? 96 : 80) + 20 * e / 1000);
+        if (e > 200 && brkD && !(ohOn && G == GR_FOUR && offbeat)) {
+            int m = b->dr.hat_mode, acc = offbeat ? 1000 : step % 2 == 0 ? 820 : 620, hit;
+            hit = m == SBHM_16 ? 1 : m == SBHM_OFF8 ? offbeat : m == SBHM_8 ? step % 2 == 0 : sb_euclid((b->dr.hat_k * (600000 + 800 * dens) + 500000) / 1000000, 16, b->dr.hat_rot, step);
+            if (G != GR_FOUR && step % 2 == 1 && e > 600 && !hit) hit = sb_rchance(&r, 350 * dens / 1000);
+            if (hit && (m != SBHM_16 || dens > 200 || step % 2 == 0)) { int v = 58 + 46 * acc * (600 + 400 * e / 1000) / 1000000; if (brk) v = v * 8 / 10; SB_DRUM(SBD_HAT, v); }
+        }
+        if (b->dr.ride && live && (G == GR_DNB ? step % 2 == 0 : half ? step % 4 == 0 : offbeat)) SB_DRUM(SBD_RIDE, G == GR_DNB ? 62 + (step % 4 ? 0 : 14) : 72);
+        if ((e > 550 || (brk && st->break_drums)) && brkD && sb_euclid(b->dr.perc_k, 16, b->dr.perc_rot, step) && sb_rchance(&r, 600 + 400 * dens / 1000)) SB_DRUM(b->dr.perc_lane, 78 + 30 * e / 1000);
+        if (b->style == SB_PSY && e > 600 && !brk && step % 2 == 1 && sb_rchance(&r, 300 + 500 * dens / 1000)) SB_DRUM(SBD_SHAKE, 50 + 20 * e / 1000);
+        if (sec == SEC_BUILD && !(half && lastBarOfBuild && step >= 8) && !tomFillActive) {
+            int every = 4 * barInSec < secLen ? 4 : 2 * barInSec < secLen ? 2 : 1;
+            if (step % every == 0) SB_DRUM(st->roll, 60 + 60 * barInSec / secLen);
+            if (4 * barInSec >= 3 * secLen && step % 2 == 1) SB_DRUM(st->roll, 70 + 50 * barInSec / secLen);
         }
     }
-    if (live && step == 0 && (barInSec == 0 || (barInPhrase == 0 && sb_rchance(&r, 500)))) SB_DRUM(SBD_CRASH, barInSec == 0 ? 118 : 95);
-    bbOn = sec != SEC_BUILD && !(sec == SEC_INTRO && barInSec < 4) && !brk;
-    if (G == GR_FOUR) {
-        if (bbOn && e > 330 && bb && (sec != SEC_GROOVE || b->dr.clap_groove || b->style != SB_TECHNO) && !(b->style == SB_PSY && !live && sec != SEC_GROOVE)) SB_DRUM(SBD_CLAP, 108);
-        if (bbOn && (b->style == SB_OUTRUN || b->style == SB_HARD) && bb) SB_DRUM(SBD_SNARE, 118);
-        if (bbOn && b->style == SB_ACID && e > 500 && (step == 7 || step == 15) && sb_rchance(&r, 500)) SB_DRUM(SBD_SNARE, 52);
-    } else if (bbOn && e > 300) {
-        if (bb) { SB_DRUM(SBD_SNARE, 120); if (half || live) SB_DRUM(SBD_CLAP, half ? 115 : 90); }
-        if (sb_has(b->dr.ghost, b->dr.nghost, step) && sb_rchance(&r, 500 + 400 * dens / 1000)) SB_DRUM(SBD_SNARE2, 45 + 20 * e / 1000);
-    }
-    offbeat = step % 4 == 2;
-    ohOn = brkD && e > 450 && !brk && (G == GR_FOUR || (G != GR_HALF && live && step == 14) || (half && live && (step == 6 || step == 14) && b->dr.four));
-    if (ohOn && (G != GR_FOUR || offbeat)) SB_DRUM(SBD_OPEN, (G == GR_FOUR ? 92 : 80) + 20 * e / 1000);
-    if (e > 200 && brkD && !(ohOn && G == GR_FOUR && offbeat)) {
-        int m = b->dr.hat_mode, acc = offbeat ? 1000 : step % 2 == 0 ? 820 : 620, hit;
-        hit = m == SBHM_16 ? 1 : m == SBHM_OFF8 ? offbeat : m == SBHM_8 ? step % 2 == 0 : sb_euclid((b->dr.hat_k * (600000 + 800 * dens) + 500000) / 1000000, 16, b->dr.hat_rot, step);
-        if (G != GR_FOUR && step % 2 == 1 && e > 600 && !hit) hit = sb_rchance(&r, 350 * dens / 1000);
-        if (hit && (m != SBHM_16 || dens > 200 || step % 2 == 0)) { int v = 58 + 46 * acc * (600 + 400 * e / 1000) / 1000000; if (brk) v = v * 8 / 10; SB_DRUM(SBD_HAT, v); }
-    }
-    if (b->dr.ride && live && (G == GR_DNB ? step % 2 == 0 : half ? step % 4 == 0 : offbeat)) SB_DRUM(SBD_RIDE, G == GR_DNB ? 62 + (step % 4 ? 0 : 14) : 72);
-    if ((e > 550 || (brk && st->break_drums)) && brkD && sb_euclid(b->dr.perc_k, 16, b->dr.perc_rot, step) && sb_rchance(&r, 600 + 400 * dens / 1000)) SB_DRUM(b->dr.perc_lane, 78 + 30 * e / 1000);
-    if (b->style == SB_PSY && e > 600 && !brk && step % 2 == 1 && sb_rchance(&r, 300 + 500 * dens / 1000)) SB_DRUM(SBD_SHAKE, 50 + 20 * e / 1000);
-    if ((sec == SEC_GROOVE || live) && barInPhrase == 7 && step >= 12) {
-        sb_rng_t rf = sb_rng(sb_hash(b->seed, bar * 3u + 5u));
-        if (sb_rchance(&rf, 350 + 400 * dens / 1000)) {
-            sb_rng_t rk = sb_rng(sb_hash(b->seed, bar)); int F = (int)sb_ri(&rk, 3);
-            if (b->style == SB_OUTRUN || b->style == SB_PSY) SB_DRUM(step % 2 ? SBD_TOMH : SBD_TOML, 95 + 6 * (step - 12));
-            else if (G == GR_DNB || G == GR_BREAKS) SB_DRUM(step == 15 ? SBD_SNARE : SBD_SNARE2, 80 + 10 * (step - 12));
-            else if (half) { if (step != 13) SB_DRUM(F ? SBD_SNARE : SBD_TOMH, 90 + 8 * (step - 12)); }
-            else SB_DRUM(F == 0 ? SBD_SNARE : F == 1 ? (step < 14 ? SBD_TOMH : SBD_TOML) : SBD_CLAP, 80 + 8 * (step - 12));
-        }
-    }
-    if (sec == SEC_BUILD && !(half && lastBarOfBuild && step >= 8)) {
-        int every = 4 * barInSec < secLen ? 4 : 2 * barInSec < secLen ? 2 : 1;
-        if (step % every == 0) SB_DRUM(st->roll, 60 + 60 * barInSec / secLen);
-        if (4 * barInSec >= 3 * secLen && step % 2 == 1) SB_DRUM(st->roll, 70 + 50 * barInSec / secLen);
-    }
-    /* ---- bass, its wobble, the sub */
+
+    /* ---- bass, its wobble, the sub (cut during Beat 4 of the Gated Tom Roll for drop impact) */
     {
-        int bassOn = !brk && (sec != SEC_INTRO || ik == IK_BASS) && !lastBarOfBuild && !(sec == SEC_BUILD && st->sub && barInSec < secLen - 2 && b->bass_kind != SBBK_ROLLER);
+        int bassCutByFill = tomFillActive && step >= 12;
+        int bassOn = !brk && !bassCutByFill && (sec != SEC_INTRO || ik == IK_BASS) && !(sec == SEC_BUILD && st->sub && barInSec < secLen - 2 && b->bass_kind != SBBK_ROLLER);
         if (b->has_alt && live && step == 0 && barInSec % 4 == 0) {
             int a = (barInSec / 4) % 3;
             if (b->bass_alt[a] != b->snd[L_BASS]) { b->snd[L_BASS] = b->bass_alt[a]; b->sounds_changed = 1; }
@@ -614,13 +658,14 @@ void sb_step16(sb_brain_t *b, sb_events_t *ev)
             if (s->on && !(sec == SEC_BUILD && b->has_alt)) {
                 sb_add(ev, L_BASS, SB_NOTE(s->d, s->o, 36), s->v, s->slide ? s->len + 1 : s->len);
                 if (s->has_wob) { ev->has_wob = 1; ev->wob = s->wob; }
-                if (st->sub) { int sn = SB_NOTE(s->d, 0, 24); while (sn > 40) sn -= 12; while (sn < 28) sn += 12; sb_add(ev, L_SUB, sn, 110 * st->sub / 1000, s->len); }
+                if (st->sub) { int sn = SB_NOTE(s->d, 0, 24); while (sn > 40) sn -= 12; while (sn < 28) sn += 12; sb_add(ev, L_SUB, sn, 118 * st->sub / 1000, s->len); }
             }
         }
     }
+
     /* ---- arp */
     bassDrop = st->drop_bass && live;
-    if (!bassDrop && b->layer_on[0] && (e > 550 || (brk && st->layers[0] > 900)) && sec != SEC_INTRO) {
+    if (!bassDrop && !(tomFillActive && step >= 12) && b->layer_on[0] && (e > 550 || (brk && st->layers[0] > 900)) && sec != SEC_INTRO) {
         if (step % b->arp.rate == 0 && step != b->arp.skip) {
             static const int8_t TONES[4] = {0, 2, 4, 7};
             int i = step / b->arp.rate, span = 4 * b->arp.oct, j = i % span;
@@ -631,35 +676,65 @@ void sb_step16(sb_brain_t *b, sb_events_t *ev)
             sb_add(ev, L_ARP, sb_fold(SB_NOTE(TONES[j % 4], (b->arp.oct == 2 ? 0 : 1) + j / 4, 48), 72), 80 + 30 * e / 1000, b->arp.gate ? b->arp.rate : 1);
         }
     }
+
     /* ---- the hook */
-    if ((!bassDrop && b->layer_on[1] && (live || brk || (sec == SEC_GROOVE && barInSec >= 4 && e > 500))) || ik == IK_HOOK) {
+    if ((!(tomFillActive && step >= 12) && !bassDrop && b->layer_on[1] && (live || brk || (sec == SEC_GROOVE && barInSec >= 4 && e > 500))) || ik == IK_HOOK) {
         const sb_hstep_t *s = &b->hook[(barInPhrase * 16 + step) % b->hook_n];
-        if (s->on) sb_add(ev, L_HOOK, sb_fold(SB_NOTE(s->d, s->o, 48), 74), s->v * (750 + 250 * e / 1000) / 1000, s->len);
+        if (s->on) sb_add(ev, L_HOOK, sb_fold(SB_NOTE(s->d, s->o, 48), 76), s->v * (800 + 200 * e / 1000) / 1000, s->len);
     }
+
     /* ---- the pad */
     if ((!bassDrop && b->layer_on[2] && sec != SEC_BUILD && (e < 800 || st->layers[2] > 900)) || brk || sec == SEC_INTRO || sec == SEC_OUTRO) {
         if (step == 0 && (bar - b->track_start_bar) % b->chord_bars == 0) {
             static const int8_t P3[4] = {0, 2, 4, 8}; int len = 16 * b->chord_bars - 1, n = b->pad.add9 ? 4 : 3, q;
-            for (q = 0; q < n; q++) { int d = P3[q]; sb_add(ev, L_PAD, SB_NOTE(d + (b->pad.inv == 1 && d == 0 ? 7 : 0), 0, 48), 70 + 20 * e / 1000, len); }
+            for (q = 0; q < n; q++) { int d = P3[q]; sb_add(ev, L_PAD, SB_NOTE(d + (b->pad.inv == 1 && d == 0 ? 7 : 0), 0, 48), 75 + 20 * e / 1000, len); }
         }
     }
+
     /* ---- stabs */
-    if (!bassDrop && b->layer_on[3] && live && b->stab[step]) { sb_add(ev, L_STAB, SB_NOTE(0, 0, 60), 100, 1); sb_add(ev, L_STAB, SB_NOTE(2, 0, 60), 100, 1); sb_add(ev, L_STAB, SB_NOTE(4, 0, 60), 100, 1); }
+    if (!(tomFillActive && step >= 12) && !bassDrop && b->layer_on[3] && live && b->stab[step]) {
+        sb_add(ev, L_STAB, SB_NOTE(0, 0, 60), 115, 1);
+        sb_add(ev, L_STAB, SB_NOTE(2, 0, 60), 115, 1);
+        sb_add(ev, L_STAB, SB_NOTE(4, 0, 60), 115, 1);
+    }
+
     /* ---- fx: the riser */
     if (sec == SEC_BUILD && barInSec == 0 && step == 0) sb_add(ev, L_FX, 60 + b->key, 110, secLen * 16 - 1);
-    if (ik == IK_ATMOS && barInSec == 0 && step == 0) sb_add(ev, L_FX, 60 + b->key, 96, secLen * 8 - 1);   /* (0.6: the atmosphere's swell) */
-    /* ---- the filters, the master, the duck */
+    if (ik == IK_ATMOS && barInSec == 0 && step == 0) sb_add(ev, L_FX, 60 + b->key, 96, secLen * 8 - 1);
+
+    /* ---- the filters, the master, the duck (Aggressive French Touch Pump & Gated Reverb for OUTRUN) */
     t = sec == SEC_BUILD ? (barInSec * 16 + step) * 1000 / (secLen * 16) : ik == IK_ATMOS && first ? (barInSec * 16 + step) * 1000 / (secLen * 8) : 0;
-    if (!st->sub) ev->cut[L_BASS] = (int16_t)(350 + 500 * e / 1000);
-    ev->cut[L_ARP] = (int16_t)(300 + 600 * e / 1000); ev->cut[L_HOOK] = (int16_t)(450 + 500 * e / 1000);
-    ev->cut[L_PAD] = (int16_t)(250 + 500 * e * (1000 - b->knobs[K_TENSION] / 2) / 1000000); ev->cut[L_FX] = (int16_t)(100 + 850 * t / 1000);
+    if (b->style == SB_OUTRUN) {
+        /* Darker, mid-heavy low-pass ceiling on bass/pads; brighter vocal midrange cut on the Hook lead */
+        ev->cut[L_BASS] = (int16_t)(300 + 380 * e / 1000);
+        ev->cut[L_ARP]  = (int16_t)(280 + 480 * e / 1000);
+        ev->cut[L_HOOK] = (int16_t)(580 + 400 * e / 1000);
+        ev->cut[L_PAD]  = (int16_t)(220 + 380 * e * (1000 - b->knobs[K_TENSION] / 2) / 1000000);
+        ev->cut[L_FX]   = (int16_t)(100 + 850 * t / 1000);
+        ev->duck        = (int16_t)(820 + 180 * e / 1000); /* Heavy French Electro sidechain pump */
+    } else {
+        if (!st->sub) ev->cut[L_BASS] = (int16_t)(350 + 500 * e / 1000);
+        ev->cut[L_ARP]  = (int16_t)(300 + 600 * e / 1000);
+        ev->cut[L_HOOK] = (int16_t)(450 + 500 * e / 1000);
+        ev->cut[L_PAD]  = (int16_t)(250 + 500 * e * (1000 - b->knobs[K_TENSION] / 2) / 1000000);
+        ev->cut[L_FX]   = (int16_t)(100 + 850 * t / 1000);
+        ev->duck        = (int16_t)(550 + 350 * e / 1000);
+    }
+
     ev->hp = (int16_t)(sec == SEC_BUILD ? sb_clamp((t - 500) * 16 / 10, 0, 100000) : 0);
-    ev->duck = (int16_t)(550 + 350 * e / 1000);
     { int ee = e * 1000 / 900; ev->gain = (int16_t)(brk ? 580 : 600 + 400 * (ee < 1000 ? ee : 1000) / 1000); }
-    ev->verb = (int16_t)(brk ? 600 : sec == SEC_BUILD ? 350 + 400 * t / 1000 : 250);
+
+    /* Spike reverb during the Gated Tom Roll (steps 0..13), then choke it dry right before Beat 1 drops! */
+    if (tomFillActive) {
+        ev->verb = (int16_t)(step < 14 ? 950 : 120);
+    } else {
+        ev->verb = (int16_t)(brk ? 650 : sec == SEC_BUILD ? 350 + 400 * t / 1000 : (b->style == SB_OUTRUN ? 360 : 250));
+    }
+
     ev->lp = (int16_t)(ik == IK_FILTER ? 850 - 850 * (barInSec * 16 + step) / (secLen * 16) : 0);
     ev->bar = bar; ev->step = (uint8_t)step; ev->sec = (uint8_t)sec_real; ev->chord = (uint8_t)chord; ev->key = b->key; ev->scale = b->scale; ev->e = (int16_t)e; ev->bpm = b->bpm;
     ev->sec_bar = (uint16_t)barInSec; ev->sec_len = (uint16_t)secLen; ev->plan_at = b->plan_at; ev->plan_n = b->plan_n;
+
     /* the clock */
     b->step++;
     if (b->step == 16) { b->step = 0; b->bar++; sb_next_bar(b); }
@@ -668,7 +743,6 @@ void sb_step16(sb_brain_t *b, sb_events_t *ev)
 
 void sb_set_seed(sb_brain_t *b, uint32_t seed, int style) { b->track_no = 0; sb_new_track(b, seed, style < 0 ? b->style : style, 0, 0, 0); }
 void sb_reroll(sb_brain_t *b, int L) { b->rerolls[L]++; b->locks[L] = 0; sb_motifs(b); sb_pick_sounds(b); }
-/* (0.2) REWIND: the section from its first beat again (the DJ's reload); the bars go on counting */
 void sb_rewind(sb_brain_t *b) { b->sec_bar = 0; b->phrase_bar = 0; b->step = 0; }
 void sb_remotif(sb_brain_t *b, int L, int delta)
 {
