@@ -49,7 +49,7 @@ enum { SBHM_16, SBHM_OFF8, SBHM_8, SBHM_16GAP };
 /* the drum lanes: GM notes */
 enum { SBD_KICK = 36, SBD_KICK2 = 35, SBD_SNARE = 38, SBD_CLAP = 39, SBD_HAT = 42, SBD_OPEN = 46, SBD_RIM = 37, SBD_SNARE2 = 40, SBD_TOML = 43,
        SBD_TOMH = 48, SBD_CRASH = 49, SBD_RIDE = 51, SBD_SHAKE = 70, SBD_CONGA = 63, SBD_BELL = 56, SBD_CLAVE = 75 };
-const char *const SB_STYLE_NAMES[SB_NSTYLES] = { "TECHNO", "TRANCE", "PSY", "ACID", "RAVE", "HARD", "DNB", "HOUSE" };
+const char *const SB_STYLE_NAMES[SB_NSTYLES] = { "TECHNO", "TRANCE", "PSY", "ACID", "RAVE", "OUTRUN", "DNB", "HOUSE" };
 const char *const SB_SEC_NAMES[7] = { "INTRO", "GROOVE", "BUILD", "DROP", "BREAK", "PEAK", "OUTRO" };
 static const int16_t SB_SEC_E[7] = { 250, 550, 750, 1000, 300, 920, 320 };
 static const uint8_t SB_STYLE_ORDER[SB_NSTYLES] = { SB_HOUSE, SB_TECHNO, SB_ACID, SB_TRANCE, SB_PSY, SB_HARD, SB_RAVE, SB_DNB };
