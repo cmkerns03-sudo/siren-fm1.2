@@ -2,8 +2,8 @@
  * Copyright (C) 2026 3dSam (SIREN) */
 /* SIREN's screen (siren_ui.c runs it), 0.3: a DJ's deck, not a visualiser. Read at a glance in the dark:
  *
- *   TECHNO  [>               A MIN   128      the style, playing, the key, the tempo; the beat (four dots)
- *   SEED 4K2-9XQ  TRACK 3    . . . .  BPM     the seed (it plays the same rave again), the track of the set
+ *   TECHNO  [>                A MIN   128      the style, playing, the key, the tempo; the beat (four dots)
+ *   SEED 4K2-9XQ  TRACK 3    . . . .  BPM      the seed (it plays the same rave again), the track of the set
  *   [intro|groove|BUILD|##DROP##|break|..]    the track's plan as the brain wrote it, coloured by section (the CDJs'
  *   GROOVE          DROP IN 8                 phrases), the playhead; the section, and what comes next and when
  *   BAR 5/16  PHRASE 3/8         SET 12:34
@@ -12,7 +12,7 @@
  *   ...
  *   FILTER  INTENSITY  SPACE  MELODY          the four knobs as they act now (a layer's key held: its strip,
  *                                             VOLUME FILTER SPACE VARIATION)
- *   FX ROLL 1/8 / REROLL / ...      CPU 31%   the effect held, what was just done, what is to come; the load
+ *   FX ROLL 1/8 / REROLL / ...     CPU 31%   the effect held, what was just done, what is to come; the load
  *
  * (0.5) The layer in the hands (SELECT, or its key held) lit; a layer the arrangement keeps waiting for room: WAIT.
  * HOME: the effects page, the 16 keys of FX + key for this style (the one held lit); HOME again: the keys.
@@ -23,8 +23,8 @@
  * draws it (tests/siren/screen_test.c). */
 static const uint8_t SU_WHITE[16] = {0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26};   /* white key -> note key bit */
 static const char *const SU_LAYER[7] = {"DRUMS", "BASS", "ARP", "HOOK", "PAD", "STABS", "FX"};
-static const char *const SU_STYLE[SB_NSTYLES] = {"TECHNO", "TRANCE", "PSY", "ACID", "RAVE", "HARD", "DRUM&BASS", "HOUSE"};
-static const char *const SU_STYLE_TAG[SB_NSTYLES] = {"TEC", "TRA", "PSY", "ACI", "RAV", "HRD", "DNB", "HOU"};
+static const char *const SU_STYLE[SB_NSTYLES] = {"TECHNO", "TRANCE", "PSY", "ACID", "RAVE", "OUTRUN", "DRUM&BASS", "HOUSE"};
+static const char *const SU_STYLE_TAG[SB_NSTYLES] = {"TEC", "TRA", "PSY", "ACI", "RAV", "OUT", "DNB", "HOU"};
 static const char *const SU_NOTE[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const SU_SCALE[5] = {"MINOR", "DORIAN", "PHRYGIAN", "HARMONIC", "MAJOR"};
 static const char *const SU_SCALE_S[5] = {"MINOR", "DORIAN", "PHRYG", "HARM", "MAJOR"};   /* (0.9: the header's, big) */
@@ -182,7 +182,7 @@ static void su_head(void)
     su_t(6, 4, SU_STYLE[sb.style % SB_NSTYLES], SU_TXT, 2);
     su_t(6, 23, sr.playing ? "[" : "\\", sr.playing ? SU_ACC : SU_DIM, 1);
     sb_code(sb.seed, code);
-    cv_text(16, 17, &FONT_S, code, SU_DIM);                            /* (0.9: the seed and the mode in the big font) */
+    cv_text(16, 17, &FONT_S, code, SU_DIM);                             /* (0.9: the seed and the mode in the big font) */
     su_t(124, 4, SU_NOTE[sr.ev.key % 12u], SU_ACC, 2);
     cv_text(124, 17, &FONT_S, SU_SCALE_S[sr.ev.scale % 5u], SU_DIM);
     (void)s;
@@ -211,7 +211,7 @@ static void su_plan(void)
     for (i = 0; i < n; i++) tot += sb.plan_len[i];
     for (i = 0; i < at; i++) cum += sb.plan_len[i];
     if (!tot) tot = 1;
-    pos = (cum + sb.sec_bar) * 16u + sr.ev.step;                       /* sixteenths into the track */
+    pos = (cum + sb.sec_bar) * 16u + sr.ev.step;                        /* sixteenths into the track */
     x = 4 + (int32_t)(pos * 232u / (tot * 16u));
     sec = sb.plan_sec[at] % 7u;
     /* what comes: a drop (or the peak) if one is ahead, else the next section; when, in bars (the last: beats) */
@@ -229,7 +229,7 @@ static void su_plan(void)
     }
     cv_begin(240, 46, SU_BG);
     x0 = 4;
-    for (i = 0, cum = 0; i < n; i++) {                                 /* the sections, past ones dimmed */
+    for (i = 0, cum = 0; i < n; i++) {                                  /* the sections, past ones dimmed */
         int32_t a = 4 + (int32_t)(cum * 232u / tot), b;
         cum += sb.plan_len[i];
         b = 4 + (int32_t)(cum * 232u / tot);
@@ -241,7 +241,7 @@ static void su_plan(void)
     if (j < n) su_c(&r, SB_SEC_NAMES[sb.plan_sec[j] % 7u]); else su_c(&r, "NEXT TRACK");
     su_c(&r, " IN ");
     if (beats) { su_u(&r, beats, 1); su_c(&r, beats > 1u ? " BEATS" : " BEAT"); } else su_u(&r, bars, 1);
-    if (sb.stay) { r.n = 0; su_c(&r, "STAY"); }                       /* (0.5) the section loops */
+    if (sb.stay) { r.n = 0; su_c(&r, "STAY"); }                        /* (0.5) the section loops */
     su_tr(236, 22, r.b, (j < n && (sb.plan_sec[j] == SEC_DROP || sb.plan_sec[j] == SEC_PEAK)) ? SU_ACC : SU_TXT, beats ? 1 : 2);
     (void)s;                                                           /* (0.9: no small line under it: the section and
                                                                          * what comes, big) */
@@ -328,7 +328,7 @@ static void su_knobs(void)
         su_fval(&t[1], su.lflt[L]);
         su_u(&t[2], (uint32_t)su.lspace[L], 1); su_c(&t[2], "%");
         su_c(&t[3], "V"); su_u(&t[3], sb.motif_ver[L] + 1u, 1);
-    } else if (glo) {                                                  /* (0.8) the settings' */
+    } else if (glo) {                                                   /* (0.8) the settings' */
         kn[0] = "TENSION"; kn[1] = "MUTATION"; kn[2] = "INTENSITY"; kn[3] = "MELODY";
         v[0] = su.knob[2]; v[1] = su.knob[3]; v[2] = su.knob[0]; v[3] = su.knob[1];
         for (k = 0; k < 4; k++) su_u(&t[k], (uint32_t)v[k] / 10u, 1);
@@ -348,7 +348,7 @@ static void su_knobs(void)
         int32_t x = 4 + k * 59, w = 54 * clamp(v[k], 0, 1000) / 1000, centred = !glo && k == (L >= 0 ? 1 : 0);
         su_t(x, 3, kn[k], L >= 0 ? SU_TXT : SU_DIM, 1);
         cv_rect(x, 12, 54, 3, SU_PANEL);
-        if (centred) {                                                  /* (a filter: from the middle, left LP, right HP) */
+        if (centred) {                                                   /* (a filter: from the middle, left LP, right HP) */
             int32_t m = x + 27, e = x + w;
             cv_rect(e < m ? e : m, 12, e < m ? m - e : e - m, 3, SU_ACC);
             cv_rect(m, 10, 1, 7, SU_DIM);
@@ -391,7 +391,7 @@ static void su_grid(const char *title, const char *hint, const char *const *top,
     cv_blit(0, 82);
 }
 static const char *const SU_NUM[16] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"};
-static void su_page_fx(void)                     /* FX: the effects, while a key is held */
+static void su_page_fx(void)                      /* FX: the effects, while a key is held */
 {
     const char *nm[16]; uint8_t st[16]; uint32_t k;
     for (k = 0; k < 16u; k++) { nm[k] = SIREN_PX[sb.style % SB_NSTYLES][k].name; st[k] = su.px_key == (int8_t)k ? 1u : k >= 12u ? 3u : 0u; }
