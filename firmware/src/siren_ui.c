@@ -12,7 +12,7 @@
  *                    the kit, on top of the groove (not taken); their black keys the composition's.
  *   FX               the DJ's effects, while a white key is held: 1-4 ROLL 1/4 1/8 1/16 1/32, 5 LOW PASS, 6 HIGH PASS,
  *                    7 ECHO OUT, 8 WASH OUT, 9-11 KILL LOW MID HIGH, 12 GATE, 13-16 the style's own (siren.c SIREN_PX)
- *   SEL              the style: white keys 1-8 TECHNO TRANCE PSY ACID RAVE HARD DRUM&BASS HOUSE (playing: on the next
+ *   SEL              the style: white keys 1-8 TECHNO TRANCE PSY ACID RAVE OUTRUN DRUM&BASS HOUSE (playing: on the next
  *                    8-bar phrase; the same key again: at once); 9 ALL SOUNDS (0.9: the next tracks' sounds from every
  *                    style's bank, not the style's own; PRESET always goes through all of them; 0.10: the drums too,
  *                    every style's kits); 16 keep this style
@@ -134,7 +134,7 @@ static void su_sound_step(uint32_t L, int32_t d)
 {
     siren_cmd(SC_SOUND, (int32_t)L, d, 0);
     if (L != L_DRUMS) su.locks[L] = 1;
-    su.msg_t = 0; su.snd_t = 60;                       /* (the footer names the new sound when it is in) */
+    su.msg_t = 0; su.snd_t = 60;                        /* (the footer names the new sound when it is in) */
 }
 static void su_strip(uint32_t L, uint32_t k, int32_t d)    /* (LFO) a knob on the layer chosen */
 {
@@ -166,7 +166,7 @@ static void su_give_back(void)
     if (!sr.live) { su_message("SIREN PLAYS IT ALL"); return; }
     siren_cmd(SC_LIVEOFF, 0xFF, 0, 0); su_message("GIVEN BACK TO SIREN");
 }
-static void su_dj_knob(uint32_t k, int32_t d)               /* the DJ's four */
+static void su_dj_knob(uint32_t k, int32_t d)                /* the DJ's four */
 {
     switch (k) {
     case 0: {                                               /* FILTER: the middle holds (open) a moment */
@@ -181,7 +181,7 @@ static void su_dj_knob(uint32_t k, int32_t d)               /* the DJ's four */
     default: su.knob[1] = (int16_t)clamp(su.knob[1] + d * 20, 0, 1000); siren_cmd(SC_KNOB, K_DENSITY, su.knob[1], 0); break;
     }
 }
-static void su_glo_knob(uint32_t k, int32_t d)              /* (GLO) TENSION MUTATION, then INTENSITY MELODY */
+static void su_glo_knob(uint32_t k, int32_t d)               /* (GLO) TENSION MUTATION, then INTENSITY MELODY */
 {
     static const uint8_t KI[4] = {2, 3, 0, 1}, KB[4] = {K_TENSION, K_MUTATION, K_ENERGY, K_DENSITY};
     uint32_t i = KI[k & 3u];
@@ -252,18 +252,18 @@ static void siren_input(void)
         uint32_t s = (uint32_t)su.slot_k, down = (held >> SU_WHITE[s]) & 1u;
         if (down && !su.slot_done && fm1_ms - su.slot_t0 >= 700u) {          /* held: the seed playing takes its place */
             su_fav_take(s); su.slot_done = 1; su_fav_kept();
-        } else if (!down) {                                                  /* tapped: it plays */
+        } else if (!down) {                                                 /* tapped: it plays */
             if (!su.slot_done) su_fav_play(s);
             su.slot_k = -1;
         }
     }
-    for (k = 0; k < 4u; k++)                                 /* the four knobs */
+    for (k = 0; k < 4u; k++)                                               /* the four knobs */
         if ((d = panel_enc(EN_K1 + k)) != 0) {
             if (page == SP_LFO) su_strip(su.focus, k, d);
             else if (page == SP_GLO) su_glo_knob(k, d);
             else su_dj_knob(k, d);
         }
-    if ((d = panel_enc(EN_SELECT)) != 0) {                   /* (0.5) the encoders: the layer, its sound, its motif */
+    if ((d = panel_enc(EN_SELECT)) != 0) {                    /* (0.5) the encoders: the layer, its sound, its motif */
         su.focus = (uint8_t)(((int32_t)su.focus + d % 7 + 7) % 7);
         siren_cmd(SC_MIX, SM_FOCUS, su.focus, 0);
     }
@@ -299,13 +299,13 @@ static void siren_input(void)
         }
     }
     page = su.info;
-    for (k = 0; k < 11u; k++) {                              /* the black keys: the chords on the deck, else the form */
+    for (k = 0; k < 11u; k++) {                               /* the black keys: the chords on the deck, else the form */
         if (!((notes >> SU_BLACK[k]) & 1u))
             continue;
         if (page == SP_HOME && su.focus != L_DRUMS) su_key_down(su.focus, SU_BLACK[k], 1, k);
         else su_black(k);
     }
-    for (k = 0; k < 16u; k++) {                              /* the white keys: the page's */
+    for (k = 0; k < 16u; k++) {                               /* the white keys: the page's */
         if (!((notes >> SU_WHITE[k]) & 1u))
             continue;
         switch (page) {
@@ -389,7 +389,7 @@ static void siren_leds(void)
         }
         if (on) led_put(nl, id, 1); else if (dim) led_put(dl, id, 1);
     }
-    for (k = 0; k < 11u; k++) {                                      /* the black keys */
+    for (k = 0; k < 11u; k++) {                                       /* the black keys */
         uint32_t id = 14u + SU_BLACK[k], on;
         if (page == SP_HOME && su.focus != L_DRUMS) {                /* the chords: the one playing lit */
             uint32_t np = sb.nprog ? sb.nprog : 1u;
@@ -407,7 +407,7 @@ static void siren_leds(void)
 static void siren_frame(void)
 {
     siren_input();
-    if (su.px_key >= 0 && su.msg_t < 2u) su.msg_t = 2;            /* (0.2) the effect's name while it is held */
+    if (su.px_key >= 0 && su.msg_t < 2u) su.msg_t = 2;             /* (0.2) the effect's name while it is held */
     siren_service();
     su_fav_flush();
     siren_leds();
