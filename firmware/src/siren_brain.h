@@ -5,7 +5,9 @@
 #pragma once
 #include <stdint.h>
 
-enum { SB_TECHNO, SB_TRANCE, SB_PSY, SB_ACID, SB_RAVE, SB_HARD, SB_DNB, SB_HOUSE, SB_NSTYLES };
+enum { SB_TECHNO, SB_TRANCE, SB_PSY, SB_ACID, SB_RAVE, SB_OUTRUN, SB_DNB, SB_HOUSE, SB_NSTYLES };
+#define SB_HARD SB_OUTRUN  /* Backward compatibility alias for references expecting SB_HARD */
+
 enum { SEC_INTRO, SEC_GROOVE, SEC_BUILD, SEC_DROP, SEC_BREAK, SEC_PEAK, SEC_OUTRO };
 /* the layers: the drums, the six melodic ones (their sounds picked from the style's selection), and the sub */
 enum { L_DRUMS, L_BASS, L_ARP, L_HOOK, L_PAD, L_STAB, L_FX, L_SUB, SB_NLAYERS };
@@ -82,8 +84,8 @@ void sb_step16(sb_brain_t *b, sb_events_t *ev);
 void sb_reroll(sb_brain_t *b, int layer);
 void sb_lock(sb_brain_t *b, int layer, int on);
 void sb_rewind(sb_brain_t *b);
-void sb_next_track(sb_brain_t *b);                           /* (0.5) the track ends now: the next one */
-void sb_remotif(sb_brain_t *b, int layer, int delta);        /* (0.5) another motif for that layer, its sound kept */                               /* (0.2) the section from its first beat */
+void sb_next_track(sb_brain_t *b);                            /* (0.5) the track ends now: the next one */
+void sb_remotif(sb_brain_t *b, int layer, int delta);         /* (0.5) another motif for that layer, its sound kept */                               /* (0.2) the section from its first beat */
 void sb_knob(sb_brain_t *b, int k, int v);                   /* per mille */
 void sb_code(uint32_t seed, char out[9]);                    /* "XXX-XXXX" */
 uint32_t sb_uncode(const char *c);
