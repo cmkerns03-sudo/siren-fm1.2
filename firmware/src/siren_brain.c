@@ -330,7 +330,8 @@ static void sb_motifs(sb_brain_t *b)
                 for (i = 0; i < 16; i++) {
                     int oct = (i % 4 == 2 || i % 4 == 3) ? 1 : 0;
                     int vel = (i % 4 == 0) ? 75 : (i % 4 == 2) ? 118 : 102;
-                    s[i] = sb_bs(0, oct, 1, vel);
+                    uint8_t gate_len = (i % 4 == 3) ? 1 : (i % 4 == 1) ? 2 : 1;
+                    s[i] = sb_bs(0, oct, gate_len, vel);
                 }
             } else {
                 for (i = 0; i < 16; i++) if (i % 4) { int d = (i % 4 == 3 && sb_rchance(&r, 250)) ? 4 : 0; s[i] = sb_bs(d, 0, 1, i % 4 == 1 ? 110 : 90); }
@@ -406,6 +407,7 @@ static void sb_motifs(sb_brain_t *b)
                 h->o = (int8_t)((step16 == 10 || step16 == 14) && sb_rchance(&r, 450) ? 2 : 1);
                 h->len = (uint8_t)((step16 == 0 || step16 == 6) ? 4 : 2);
                 h->v = (uint8_t)(step16 == 0 || step16 == 6 ? 127 : 114);
+                if (step16 > 0 && sb_abs(h->d - (h - 1)->d) >= 2) h->slide = 1;
                 h->on = 1;
             }
             b->hook_n = (uint8_t)len;
