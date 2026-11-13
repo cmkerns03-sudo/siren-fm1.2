@@ -79,7 +79,7 @@ static const sb_style_t SB_STY[SB_NSTYLES] = {
                  1, {SBBK_ACID}, 80, {200, 500, 300, 300, 1000, 0}, 6, 12, 500, SBD_CLAP, 3, {SBD_BELL, SBD_RIM, SBD_CLAVE}, 2, {SBHM_16, SBHM_16GAP} },
     /* RAVE */   { 0, GR_BREAKS, 0, 0, 0, 0, 0, 140, 150, 2, {SB_MINOR, SB_HARMONIC}, 3, {{4, {0, 5, 6, 4}}, {4, {0, 3, 6, 5}}, {4, {0, 6, 5, 6}}}, 2,
                  2, {SBBK_REESE, SBBK_OFFBEAT}, 0, {400, 600, 600, 950, 1000, 600}, 6, 12, 400, SBD_SNARE, 2, {SBD_RIM, SBD_SHAKE}, 2, {SBHM_8, SBHM_16GAP} },
-    /* OUTRUN (Power Glove / Clutch profile: 102-112 BPM, Minor/Phrygian, Sidechained 16th Octaves) */
+    /* OUTRUN (Zenith/Clutch profile: 102-112 BPM, Minor/Phrygian, Sidechained 16th Octaves) */
                  { 0, GR_FOUR, 250, 1, 800, 0, 0, 102, 112, 2, {SB_MINOR, SB_PHRYGIAN}, 5,
                  {{4, {0, 5, 3, 6}}, {4, {0, 5, 6, 4}}, {4, {0, 6, 3, 4}}, {4, {0, 1, 5, 4}}, {2, {0, 5}}}, 4,
                  1, {SBBK_ROLLING}, 0, {800, 1000, 950, 750, 1000, 0}, 6, 10, 0, SBD_TOML, 3, {SBD_TOML, SBD_TOMH, SBD_SNARE2}, 2, {SBHM_8, SBHM_16} },
@@ -96,7 +96,7 @@ static const uint16_t SB_INTRO_W[SB_NSTYLES][IK_N] = {
     {330, 200, 50, 100, 250, 70, 0},      /* PSY */
     {330, 50, 50, 150, 370, 50, 0},       /* ACID */
     {330, 100, 200, 100, 50, 150, 70},    /* RAVE */
-    {100, 350, 200, 150, 200, 0, 0},      /* OUTRUN */
+    {0,   750, 250, 0,   0,   0, 0},      /* OUTRUN (Strictly Atmosphere & Hook intro, zero drums/bass) */
     {330, 150, 100, 100, 150, 70, 100},   /* DNB */
     {500, 50, 200, 150, 100, 0, 0},       /* HOUSE */
 };
@@ -253,7 +253,7 @@ static void sb_pick_sounds(sb_brain_t *b)
         sb_rng_t r; int n;
         if (b->locks[L] && b->snd[L] >= 0) continue;
         r = sb_rng(sb_hash(b->seed, (uint32_t)(100 + L * 7 + b->rerolls[L] * 131)));
-        n = p->ncur[b$style][L];
+        n = p->ncur[b->style][L];
         if (n) b->snd[L] = (int16_t)sb_ri(&r, (uint32_t)n);
     }
     {
@@ -329,7 +329,7 @@ static void sb_motifs(sb_brain_t *b)
                 /* Sidechained 16th-note rolling octave bassline with ducked downbeats */
                 for (i = 0; i < 16; i++) {
                     int oct = (i % 4 == 2 || i % 4 == 3) ? 1 : 0;
-                    int vel = (i % 4 == 0) ? 75 : (i % 4 == 2) ? 118 : 102; /* Ducked kick downbeat */
+                    int vel = (i % 4 == 0) ? 75 : (i % 4 == 2) ? 118 : 102;
                     s[i] = sb_bs(0, oct, 1, vel);
                 }
             } else {
@@ -431,7 +431,7 @@ static void sb_motifs(sb_brain_t *b)
     if (!SB_KEEP(L_ARP)) {
         static const uint8_t RATE[4] = {1, 1, 1, 2}, GATE[3] = {0, 0, 1};
         sb_rng_t r = SB_RL(L_ARP);
-        b->arp.order = (uint8_t)sb_ri(&r, 5); b->arp.rate = SB_PICK(&r, RATE); b->arp.oct = (uint8_t)(1 + sb_ri(&r, 2)); b->arp.gate = SB_PICK(&r, GATE);
+        b->arp.order = (uint8_t>sb_ri(&r, 5); b->arp.rate = SB_PICK(&r, RATE); b->arp.oct = (uint8_t)(1 + sb_ri(&r, 2)); b->arp.gate = SB_PICK(&r, GATE);
         b->arp.skip = (int8_t)(sb_rchance(&r, 300) ? (int)sb_ri(&r, 16) : -1); b->arp.seed = sb_rnext(&r);
     }
     if (!SB_KEEP(L_STAB)) { sb_rng_t r = SB_RL(L_STAB); int kk = 3 + (int)sb_ri(&r, 3), rot = (int)sb_ri(&r, 16); for (i = 0; i < 16; i++) b->stab[i] = (uint8_t)(sb_euclid(kk, 16, rot, i) && i % 4 != 0 ? 110 : 0); }
@@ -518,7 +518,7 @@ static void sb_next_bar(sb_brain_t *b)
             b->dive = 0;
         } else { sb_plan_insert(b, b->plan_at + 1, SEC_BUILD, b->dive); sb_plan_insert(b, b->plan_at + 2, SEC_DROP, 32); b->dive = 0; sb_enter(b); return; }
     }
-    if (b->break_req) { b->break_req = 0; sb_plan_insert(b, b->plan_at + 1, SEC_BREAK, 8); sb_enter(b); return; }
+    if (b->break_req) { b->break_req, b->break_req = 0; sb_plan_insert(b, b->plan_at + 1, SEC_BREAK, 8); sb_enter(b); return; }
     if (b->sec_bar >= b->plan_len[b->plan_at]) {
         sb_enter(b);
     }
