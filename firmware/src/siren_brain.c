@@ -290,49 +290,16 @@ static void sb_motifs(sb_brain_t *b)
     if (!SB_KEEP(L_DRUMS)) {
         sb_rng_t r = SB_RL(L_DRUMS);
         if (b->style == SB_OUTRUN) {
-            /* Hardcode a rigid, driving 80s outrun drum machine grid */
-            b->dr.hat_k = 4; b->dr.hat_rot = 0;
-            b->dr.perc_k = 4; b->dr.perc_rot = 0;
-            b->dr.perc_lane = SBD_TOML; b->dr.clap_groove = 0; b->dr.ride = 0;
-            b->dr.hat_mode = SBHM_16; b->dr.gallop = 0; b->dr.four = 1;
-        } else {
-            static const uint8_t BK_DNB0[] = {0, 10}, BK_DNB2[] = {0, 7, 10}, BK_DNB3[] = {0, 6, 10}, BK_DNB4[] = {0, 10, 13};
-            static const uint8_t BK_H0[] = {0}, BK_H1[] = {0, 10}, BK_H2[] = {0, 6}, BK_H3[] = {0, 11, 14}, BK_H4[] = {0, 3, 10}, BK_H5[] = {0, 7};
-            static const uint8_t BK_B0[] = {0, 10}, BK_B1[] = {0, 6, 10}, BK_B2[] = {0, 2, 10}, BK_B3[] = {0, 10, 11}, BK_B4[] = {0, 3, 6, 10};
-            static const struct { const uint8_t *a; uint8_t n; } KD[5] = { {BK_DNB0, 2}, {BK_DNB0, 2}, {BK_DNB2, 3}, {BK_DNB3, 3}, {BK_DNB4, 3} },
-                KH[6] = { {BK_H0, 1}, {BK_H1, 2}, {BK_H2, 2}, {BK_H3, 3}, {BK_H4, 3}, {BK_H5, 2} },
-                KB[5] = { {BK_B0, 2}, {BK_B1, 3}, {BK_B2, 3}, {BK_B3, 3}, {BK_B4, 4} };
-            static const uint8_t GH_H1[] = {15}, GH_H2[] = {6, 14}, GH_H3[] = {14};
-            static const uint8_t GH0[] = {7, 9, 15}, GH1[] = {7, 15}, GH2[] = {9, 14}, GH3[] = {3, 7, 11, 15}, GH4[] = {7, 9};
-            static const struct { const uint8_t *a; uint8_t n; } GHH[4] = { {GH_H1, 0}, {GH_H1, 1}, {GH_H2, 2}, {GH_H3, 1} },
-                GHO[5] = { {GH0, 3}, {GH1, 2}, {GH2, 2}, {GH3, 4}, {GH4, 2} };
-            b->dr.hat_k = (uint8_t)(st->hats_lo + sb_ri(&r, (uint32_t)(st->hats_hi - st->hats_lo + 1))); b->dr.hat_rot = (uint8_t)sb_ri(&r, 4);
-            b->dr.perc_k = (uint8_t)(3 + sb_ri(&r, 4)); b->dr.perc_rot = (uint8_t)sb_ri(&r, 16);
-            b->dr.perc_lane = st->perc[sb_rnext(&r) % st->nperc]; b->dr.clap_groove = (uint8_t)sb_rchance(&r, 600); b->dr.ride = (uint8_t)sb_rchance(&r, st->ride);
-            b->dr.hat_mode = st->hm[sb_rnext(&r) % st->nhm]; b->dr.gallop = (uint8_t)sb_rchance(&r, st->gallop);
-            if (G == GR_DNB) { i = (int)(sb_rnext(&r) % 5); b->dr.break_k = KD[i].a; b->dr.nbreak_k = KD[i].n; }
-            else if (G == GR_HALF) { i = (int)(sb_rnext(&r) % 6); b->dr.break_k = KH[i].a; b->dr.nbreak_k = KH[i].n; }
-            else { i = (int)(sb_rnext(&r) % 5); b->dr.break_k = KB[i].a; b->dr.nbreak_k = KB[i].n; }
-            if (G == GR_HALF) { i = (int)(sb_rnext(&r) % 4); b->dr.ghost = GHH[i].a; b->dr.nghost = GHH[i].n; }
-            else { i = (int)(sb_rnext(&r) % 5); b->dr.ghost = GHO[i].a; b->dr.nghost = GHO[i].n; }
-            b->dr.four = (uint8_t)sb_rchance(&r, 500);
-        }
-    }
-    if (!SB_KEEP(L_BASS)) {
-        sb_rng_t r = SB_RL(L_BASS); int kind = b->bass_kind, two = kind == SBBK_WOBBLE || kind == SBBK_RIDDIM || kind == SBBK_GROWL;
-        sb_bstep_t *s = b->bass;
-        b->bass_n = (uint8_t)(two ? 32 : 16);
-        for (i = 0; i < 32; i++) s[i].on = 0;
-        if (kind == SBBK_OFFBEAT) { for (i = 2; i < 16; i += 4) s[i] = sb_bs(0, 0, 1, 100); }
-        else if (kind == SBBK_ROLLING) {
-            if (b->style == SB_OUTRUN) {
-                /* Sidechained 16th-note rolling octave bassline with ducked downbeats */
+                /* Kavinsky-style pumping bass: 16th-note syncopation with rhythmic rests and accent ducking */
                 for (i = 0; i < 16; i++) {
-                    int oct = (i % 4 == 2 || i % 4 == 3) ? 1 : 0;
-                    int vel = (i % 4 == 0) ? 75 : (i % 4 == 2) ? 118 : 102;
-                    uint8_t gate_len = (i % 4 == 3) ? 1 : (i % 4 == 1) ? 2 : 1;
-                    s[i] = sb_bs(0, oct, gate_len, vel);
+                    int oct = (i == 3 || i == 7 || i == 11 || i == 15) ? 1 : 0;
+                    int vel = (i % 2 == 0) ? 120 : 90;
+                    int active = !(i == 2 || i == 6 || i == 10 || i == 14);
+                    uint8_t gate_len = (i % 4 == 0) ? 2 : 1;
+                    s[i] = sb_bs(0, oct, gate_len, active ? vel : 0);
+                    s[i].on = active;
                 }
+            }
             } else {
                 for (i = 0; i < 16; i++) if (i % 4) { int d = (i % 4 == 3 && sb_rchance(&r, 250)) ? 4 : 0; s[i] = sb_bs(d, 0, 1, i % 4 == 1 ? 110 : 90); }
             }
