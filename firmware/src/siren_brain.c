@@ -523,3 +523,4 @@ static void sb_next_bar(sb_brain_t *b)
         sb_enter(b);
     }
 }
+void sb_rewind(sb_brain_t *b) { b->sec_bar = 0; b->phrase_bar = 0; b->step = 0; }

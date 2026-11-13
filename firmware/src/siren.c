@@ -804,17 +804,37 @@ static void siren_arrange(uint32_t sec, uint32_t now)
 /* (0.5) the black key FILL: the second half of the next bar a fill on the snare and the toms, rising, then a crash */
 static void siren_fill(uint32_t step)
 {
-    static const uint8_t FN[8] = {38, 50, 38, 47, 38, 45, 38, 41};
     sb_note_t x;
-    uint32_t k = step - 8u;
+    uint32_t k = step & 15u;
     x.layer = L_DRUMS; x.len = 1;
-    x.note = FN[k]; x.vel = (uint8_t)(62 + k * 8u);
+    /* 4 High Tom (50), 4 Mid-High Tom (48), 4 Mid Tom (47), 4 Floor Tom (41) */
+    static const uint8_t TOM_CASCADE[16] = {
+        50, 50, 50, 50,
+        48, 48, 48, 48,
+        47, 47, 47, 47,
+        41, 41, 41, 41
+    };
+    static const uint8_t TOM_VEL[16] = {
+        118, 108, 114, 110,
+        120, 110, 116, 112,
+        122, 112, 118, 114,
+        124, 116, 122, 127
+    };
+    x.note = TOM_CASCADE[k];
+    x.vel = TOM_VEL[k];
+    x.len = (k == 15u) ? 2 : 1;
     if (!siren_held_back(&x)) siren_play(&x, 0, 0);
-    if (k >= 4u && (k & 1u)) { x.note = 38; if (!siren_held_back(&x)) siren_play(&x, 0, 0); }
 }
 static int16_t siren_level(uint32_t L)           /* a part's level: its layer's place, its sound's trim, the hand's */
 {
-    return (int16_t)sb_clamp(SIREN_MIX[L - 1u][0] + sr.trim[L] + sr.lvol[L], 1, 127);
+    int32_t v = SIREN_MIX[L - 1u][0] + sr.trim[L] + sr.lvol[L];
+    if (sb.style == SB_OUTRUN) {
+        /* Front trio: Bass (+6) & Synth-String Hook (+4); background Arp/Pad/Stabs tucked back (-10) when they enter on Drops */
+        if (L == L_BASS) v += 6;
+        else if (L == L_HOOK) v += 4;
+        else if (L == L_ARP || L == L_PAD || L == L_STAB) v -= 10;
+    }
+    return (int16_t)sb_clamp(v, 1, 127);
 }
 /* (0.5) the mixer, every sixteenth: each layer's level, filter (the brain's, the sound's tone ceiling, the hand's:
  * down a low-pass deeper, up a high-pass), sends (the space, the master's and the layer's); the drums' the same; the
@@ -841,6 +861,18 @@ static void siren_mixer(const sb_events_t *ev)
     }
     if (!sr.ufilt && ev->lp > 0) song.g[G_FILT] = (int16_t)-(ev->lp * 50 / 1000);   /* (0.6: the filtered intro, opening) */
     else song.g[G_FILT] = (int16_t)(sr.ufilt < 0 ? sr.ufilt : sr.ufilt > hp ? sr.ufilt : hp);
+
+    /* Dark Outrun / French Electro ("Zenith" / "Clutch") master glue & analog warmth */
+    if (st == SB_OUTRUN) {
+        song.g[G_COMP]   = 82;   /* Heavy stereo bus glue compression (~3.2:1, slammed threshold + make-up) */
+        song.g[G_EQLOW]  = 15;   /* +3 dB sub/low-end weight at 150 Hz (12 = 0 dB) */
+        song.g[G_EQHIGH] = 9;    /* -3 dB high-shelf roll-off at 5 kHz to tame harsh digital fizz */
+        song.g[G_RDAMP]  = 92;   /* Dark, warm gated-plate reverb damping */
+    } else {
+        song.g[G_COMP]   = 0;
+        song.g[G_EQLOW]  = 12;
+        song.g[G_EQHIGH] = 12;
+    }
 }
 
 /* one sixteenth: the brain's events into the parts and the drums */
@@ -900,14 +932,16 @@ static void siren_fire(void)
             continue;
         if (sr.lean && siren_lean_skip(x, ev, &npad, &nstab))
             continue;
-        if (sr.fill_on && x->layer == L_DRUMS && (ev->step >= 8 ? x->note >= 38u && x->note <= 40u : x->note == 49u))
-            continue;                            /* (the fill's snare is the snare; its crash the crash) */
+        if (sr.fill_on && x->layer == L_DRUMS && (x->note >= 38u && x->note <= 50u))
+            continue;                            /* (mute stock snares/toms/crash during 16-step tom fill) */
         siren_play(x, 0, (uint32_t)(x->len * (u16 / 100u) * 92u));
     }
     if (sr.fill_on) {
-        if (ev->step >= 8) siren_fill(ev->step);
-        else {
-            sb_note_t x; x.layer = L_DRUMS; x.note = 49; x.vel = 112; x.len = 1;
+        siren_fill(ev->step);
+        if (ev->step == 15u) {
+            sr.fill_on = 2u;                     /* arm crash for next downbeat */
+        } else if (sr.fill_on == 2u && ev->step == 0u) {
+            sb_note_t x; x.layer = L_DRUMS; x.note = 49; x.vel = 116; x.len = 1;
             sr.fill_on = 0;
             if (!siren_held_back(&x)) siren_play(&x, 0, 0);
         }
@@ -937,7 +971,7 @@ static void siren_fire(void)
         int32_t c = ev->cut[i];
         if (c < 0)
             continue;
-        sr.bcut[i] = (int16_t)(i == L_FX ? (c >= 950 ? 0 : -(950 - c) * 45 / 850) : (c >= 700 ? 0 : -(700 - c) * 40 / 700));
+        sr.bcut[i] = (int16_t)(i == L_FX ? (c >= 950 ? 0 : -(950 - c) * 45 / 850) : (c >= 700 ? 0 : -(700 - c) * 48 / 700));
     }
     /* the master: the build's high-pass, the duck, the reverb (the parts' sends), the gain; the hands' mix (0.5) */
     sr.duck = ev->duck * 33;
@@ -1006,6 +1040,7 @@ static void siren_mix(int32_t *l, int32_t *r, uint32_t n)
     }
 }
 static int32_t siren_duck_depth(void) { return sr.duck; }
+static int32_t siren_fill_duck(void) { return sr.fill_on == 1u ? 6200 : 32767; } /* duck all synths to ~19% during tom fill */
 static int32_t siren_gain_q12(void) { return (sr.gain_q12 * sr.gate_q12) >> 12; }   /* (0.2: the GATE) */
 static void siren_scope_tap(void)                /* (mix_block: the visualiser's taps, for the screen) */
 {
@@ -1088,7 +1123,13 @@ static void siren_service(void)
 #endif
             siren_load_sound(t, (uint32_t)e, (uint32_t)pe);
             t->p[P_LEVEL] = siren_level(L); t->p[P_PAN] = SIREN_MIX[L - 1][1];
-            t->p[P_DLY] = SIREN_MIX[L - 1][2]; t->p[P_REV] = SIREN_MIX[L - 1][3]; t->p[P_CHOR] = 0;
+            t->p[P_DLY] = SIREN_MIX[L - 1][2]; t->p[P_REV] = SIREN_MIX[L - 1][3];
+            if (style == SB_OUTRUN) {
+                t->p[P_CHOR] = (int16_t)(L == L_PAD ? 95 : (L == L_HOOK ? 75 : (L == L_ARP ? 55 : 0)));
+                if (L == L_BASS && t->p[P_DIST] < 48) t->p[P_DIST] = 48; /* Warm analog drive on rolling octave bass */
+            } else {
+                t->p[P_CHOR] = 0;
+            }
             t->p[P_AMODE] = 0;                   /* (the brain is the arpeggiator: a preset's arp off) */
             sr.sound_eng[L] = e; sr.sound_pre[L] = pe; sr.sound_from[L] = from;
             break;                               /* (0.2) one sound a call: a new track's six fades not all at once */
@@ -1140,6 +1181,7 @@ static void siren_init(void)
     }
     sb_pal.kick_n16 = SD_KICK_N16;
     sb_init(&sb, &sb_pal);
+    sb_set_seed(&sb, sb.seed, 5);
     for (i = 0; i < 7u; i++) sr.applied[i] = -1, sr.applied_style[i] = -1;
     sr.ap_kick = -1; sr.gain_q12 = 4096;
     sr.spd_q12 = 4096; sr.gate_q12 = 4096; sr.eqk[0] = sr.eqk[1] = sr.eqk[2] = 12; sr.nz = 0x5EED; sr.px = SPX_NONE; sr.q_style = -1;

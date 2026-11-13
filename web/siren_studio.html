@@ -148,8 +148,8 @@ textarea{width:100%;min-height:90px;background:var(--panel2);color:var(--txt);bo
 <div id="msg"></div>
 <script>
 "use strict";
-const STY = ["TECHNO", "TRANCE", "PSY", "ACID", "RAVE", "HARD", "DRUM & BASS", "HOUSE"];
-const STY_CODE = ["TECHNO", "TRANCE", "PSY", "ACID", "RAVE", "HARD", "DNB", "HOUSE"];
+const STY = ["TECHNO", "TRANCE", "PSY", "ACID", "RAVE", "OUTRUN", "DRUM & BASS", "HOUSE"];
+const STY_CODE = ["TECHNO", "TRANCE", "PSY", "ACID", "RAVE", "OUTRUN", "DNB", "HOUSE"];
 const LAY = ["DRUMS", "BASS", "ARP", "HOOK", "PAD", "STABS", "FX"];
 const SEC = ["INTRO", "GROOVE", "BUILD", "DROP", "BREAK", "PEAK", "OUTRO"];
 const NOTE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -210,7 +210,7 @@ function fullCode(style, seed, all) { return STY_CODE[style] + " " + seedCode(se
 function parseCodes(text) {
   const out = [];
   for (const line of text.split(/[\n,;]+/)) {
-    const m = line.trim().toUpperCase().match(/^(TECHNO|TRANCE|PSY|ACID|RAVE|HARD|DNB|DRUM\s*&\s*BASS|D&B|HOUSE)\s+([0-9A-Z]{3}-?[0-9A-Z]{4})(\s+ALL)?$/);
+    const m = line.trim().toUpperCase().match(/^(TECHNO|TRANCE|PSY|ACID|RAVE|OUTRUN|DNB|DRUM\s*&\s*BASS|D&B|HOUSE)\s+([0-9A-Z]{3}-?[0-9A-Z]{4})(\s+ALL)?$/);
     if (!m) { if (line.trim()) out.push(null); continue; }
     let st = STY_CODE.indexOf(m[1]); if (st < 0) st = 6;
     out.push({style: st, seed: seedUncode(m[2].replace("-", "")), all: !!m[3]});

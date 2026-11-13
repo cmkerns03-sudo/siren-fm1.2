@@ -767,6 +767,9 @@ static struct {
     int32_t g0, g1;                                     /* the parts' gain at the block start, end (Q15) */
 } duck = {0xFFFFFFFFu, 32767, 32767};
 
+#if SIREN
+static int32_t siren_fill_duck(void);
+#endif
 static void duck_block(uint32_t adv)
 {
 #if SIREN
@@ -782,13 +785,20 @@ static void duck_block(uint32_t adv)
     }
     if (!depth || duck.t >= len) {
         duck.g1 = 32767;
-        return;
+    } else {
+        x = 32767 - (int32_t)((duck.t << 10) / (len >> 5));  /* 1 - t / T, Q15 (t < len < 2^21) */
+        if (x < 0)
+            x = 0;
+        duck.g1 = 32767 - mulq15(depth, mulq15(x, x));
+        duck.t = duck.t + adv < duck.t ? 0xFFFFFFFFu : duck.t + adv;
     }
-    x = 32767 - (int32_t)((duck.t << 10) / (len >> 5));      /* 1 - t / T, Q15 (t < len < 2^21) */
-    if (x < 0)
-        x = 0;
-    duck.g1 = 32767 - mulq15(depth, mulq15(x, x));
-    duck.t = duck.t + adv < duck.t ? 0xFFFFFFFFu : duck.t + adv;
+#if SIREN
+    {
+        int32_t fd = siren_fill_duck();
+        if (fd < duck.g1)
+            duck.g1 = fd;
+    }
+#endif
 }
 
 /* ---- the DJ filter: v < 0 a low-pass closing, > 0 a high-pass opening, 0 off. The cutoff glides
